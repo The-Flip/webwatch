@@ -40,6 +40,8 @@ rules:
   - id: weekly-repair-day
     description: 'Volunteer repair day every Saturday'
     type: recurring_event
+    # Which upcoming event this rule corresponds to (matched against title/description).
+    match: repair
     frequency: weekly
     weekday: saturday
     # For recurring events the time matters: volunteer days run 10:00-16:00.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import httpx
 
+from webwatch import rules
 from webwatch.checks import registry as checks_registry
 from webwatch.checks.base import fetch_error_results
 from webwatch.facts import Facts
@@ -44,8 +45,8 @@ def run_checks(
 ) -> list[CheckResult]:
     """Fetch each (filtered) source once and run its checks against ``facts``.
 
-    ``site`` limits to one source; ``fact`` limits to one check field. ``transport``
-    is for tests (inject an ``httpx.MockTransport``); production passes none.
+    ``site`` limits to one source; ``fact`` limits to one check field or rule id.
+    ``transport`` is for tests (inject an ``httpx.MockTransport``); production passes none.
     """
     register_builtins()
     results: list[CheckResult] = []
@@ -56,15 +57,27 @@ def run_checks(
         checks = checks_registry.checks_for(source.name)
         if fact is not None:
             checks = [check for check in checks if check.field == fact]
-        if not checks:
+
+        # Sources that read an events list get the facts' recurring-event rules run against them.
+        event_rules = []
+        if getattr(source, "provides_events", False):
+            event_rules = [r for r in facts.rules if r.type == "recurring_event"]
+            if fact is not None:
+                event_rules = [r for r in event_rules if r.id == fact]
+
+        if not checks and not event_rules:
             continue
 
         try:
             observation = source.fetch(transport=transport)
         except FetchError as err:
-            results.extend(fetch_error_results(source.name, [c.field for c in checks], str(err)))
+            names = [c.field for c in checks] + [r.id for r in event_rules]
+            results.extend(fetch_error_results(source.name, names, str(err)))
             continue
 
         results.extend(check.run(observation, facts) for check in checks)
+        results.extend(
+            rules.evaluate(rule, observation.events, site=source.name) for rule in event_rules
+        )
 
     return results

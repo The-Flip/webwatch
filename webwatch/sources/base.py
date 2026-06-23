@@ -84,11 +84,17 @@ class Observation:
     ``fields`` are the visible/authoritative reads. ``structured`` holds the
     corroborating values pulled from JSON-LD (field name -> value), used by the
     checks layer to detect metadata drift without letting metadata decide.
+    ``events`` carries the page's upcoming events for the rules engine: ``found``
+    a list when the events section was located, ``missing`` when it wasn't, and
+    ``not_supported`` for sources that don't look for events.
     """
 
     site: str
     fields: dict[str, Observed[Any]] = field(default_factory=dict)
     structured: dict[str, Any] = field(default_factory=dict)
+    events: Observed[Any] = field(
+        default_factory=lambda: Observed.not_supported("this source has no events")
+    )
 
     def get(self, name: str) -> Observed[Any]:
         """The read for ``name``; ``NOT_SUPPORTED`` if this source doesn't track it."""
@@ -104,6 +110,8 @@ class Source(ABC):
     url: str
     #: Fact names this source is designed to read. Anything else is NOT_SUPPORTED.
     tracks: frozenset[str]
+    #: Whether this source reads an events list (so the run evaluates rules against it).
+    provides_events: bool = False
 
     @abstractmethod
     def observe(self, html: str) -> Observation:

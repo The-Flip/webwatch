@@ -29,6 +29,7 @@ from bs4 import BeautifulSoup, Tag
 
 from webwatch import normalize
 from webwatch.checks.registry import Check
+from webwatch.events import extract_events
 from webwatch.facts import Facts
 from webwatch.sources.base import Observation, Observed, Source
 
@@ -101,6 +102,7 @@ class TheFlipMuseumVisit(Source):
     name = "theflip_museum_visit"
     url = "https://www.theflip.museum/visit"
     tracks = frozenset(f"hours.{day}" for day in _WEEKDAYS)
+    provides_events = True
 
     def observe(self, html: str) -> Observation:
         # Start with every weekday missing; overwrite only those the card yields.
@@ -109,13 +111,18 @@ class TheFlipMuseumVisit(Source):
             for day in _WEEKDAYS
         }
         card = _find_hours_card(BeautifulSoup(html, "lxml"))
-        if card is None:
-            return Observation(self.site, fields)
+        if card is not None:
+            for label, value in _row_pairs(card):
+                for day in expand_days(label):
+                    fields[f"hours.{day}"] = Observed.found(value)
 
-        for label, value in _row_pairs(card):
-            for day in expand_days(label):
-                fields[f"hours.{day}"] = Observed.found(value)
-        return Observation(self.site, fields)
+        parsed = extract_events(html)
+        events: Observed[Any] = (
+            Observed.found(parsed)
+            if parsed is not None
+            else Observed.missing("no upcoming events section found")
+        )
+        return Observation(self.site, fields, events=events)
 
 
 SOURCE = TheFlipMuseumVisit()

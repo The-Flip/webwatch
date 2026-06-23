@@ -35,13 +35,14 @@ Conventions:
 
 ## Dynamic rules
 
-A list under `rules:`. Each rule has an `id`, a human `description`, a `type`, an `enabled` flag, and type-specific fields. Rules are evaluated by `rules.py` against an injected clock (so tests can pin "now").
+A list under `rules:`. Each rule has an `id`, a human `description`, a `type`, an `enabled` flag, and type-specific fields. Rules are evaluated by `rules.py` against a source's observed events.
 
 ```yaml
 rules:
   - id: weekly-repair-day
     description: 'Volunteer repair day every Saturday'
     type: recurring_event
+    match: repair # which upcoming event this rule corresponds to (title/description)
     frequency: weekly
     weekday: saturday
     start: '10:00' # event time matters — volunteer days run 10:00-16:00
@@ -51,11 +52,17 @@ rules:
 
 ### Rule types
 
-| `type`            | Fields                                 | Checks that…                                                                           |
-| ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------- |
-| `recurring_event` | `frequency`, `weekday`, `start`, `end` | a matching recurring event (at the right time) appears in the site's observed schedule |
+| `type`            | Fields                                          | Checks that…                                                                   |
+| ----------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `recurring_event` | `match`, `frequency`, `weekday`, `start`, `end` | an upcoming event matching `match` is listed on `weekday`, starting at `start` |
 
-For recurring events the **time** is significant, not just the day — `start`/`end` are 24h `"HH:MM"`. The rules engine that evaluates these against a site's observed schedule arrives in a later phase; the fields are captured now so the canonical expectation is recorded.
+`match` is a keyword sought in event titles (and, as a fallback, descriptions) to find the event the rule is about. For recurring events the **time** is significant, not just the day — `start`/`end` are 24h `"HH:MM"`. The engine reads each event's _stated_ weekday and time, so:
+
+- the events list can't be read → `STRUCTURE_CHANGED`;
+- no upcoming event matches `match` → `MISMATCH` (the expected event isn't scheduled);
+- a match is found but its weekday or start time differs → `MISMATCH`;
+- a match is found but its weekday/time text is missing → `STRUCTURE_CHANGED` for that aspect;
+- everything agrees → `OK`.
 
 This table grows as we add rule types (e.g. seasonal hours, one-off events). Add a new type by extending `rules.py` and documenting it here, with a plan reviewed per [plans/](plans/README.md).
 
