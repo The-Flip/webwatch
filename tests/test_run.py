@@ -1,4 +1,4 @@
-"""Tests for the run orchestration over a fixture-backed transport (no network)."""
+"""Tests for the run orchestration over fixture-backed transports (no network)."""
 
 from __future__ import annotations
 
@@ -11,18 +11,30 @@ from webwatch.facts import load_facts
 from webwatch.result import CheckStatus
 from webwatch.run import run_checks
 
-FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_2026-06-23.html"
+FIXTURES = Path(__file__).parent / "fixtures"
+HOME = (FIXTURES / "theflip_museum_2026-06-23.html").read_text(encoding="utf-8")
+VISIT = (FIXTURES / "theflip_museum_visit_2026-06-23.html").read_text(encoding="utf-8")
 FACTS = load_facts("facts.yaml")
 
 
-def _serve(html: str) -> httpx.MockTransport:
-    return httpx.MockTransport(lambda _req: httpx.Response(200, html=html))
+def _router() -> httpx.MockTransport:
+    """Serve the right fixture per URL path, so each source sees its own page."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        html = VISIT if request.url.path.rstrip("/") == "/visit" else HOME
+        return httpx.Response(200, html=html)
+
+    return httpx.MockTransport(handler)
 
 
-def test_run_all_ok_against_fixture() -> None:
-    results = run_checks(FACTS, transport=_serve(FIXTURE.read_text(encoding="utf-8")))
+def test_all_sources_all_ok_against_fixtures() -> None:
+    results = run_checks(FACTS, transport=_router())
     assert results
-    assert all(r.status is CheckStatus.OK for r in results)
+    assert all(r.status is CheckStatus.OK for r in results), [
+        (r.site, r.name, r.status) for r in results if r.status is not CheckStatus.OK
+    ]
+    # Both sources ran: homepage (6) + visit hours (7).
+    assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit"}
 
 
 def test_fetch_error_yields_one_fetch_error_per_check(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,10 +49,17 @@ def test_fetch_error_yields_one_fetch_error_per_check(monkeypatch: pytest.Monkey
 
 
 def test_unknown_site_filter_runs_nothing() -> None:
-    results = run_checks(FACTS, site="nonexistent", transport=_serve("<html></html>"))
+    results = run_checks(FACTS, site="nonexistent", transport=_router())
     assert results == []
 
 
 def test_fact_filter_runs_one_check() -> None:
-    results = run_checks(FACTS, fact="email", transport=_serve(FIXTURE.read_text(encoding="utf-8")))
-    assert [r.name for r in results] == ["email"]
+    results = run_checks(FACTS, fact="email", transport=_router())
+    assert [(r.site, r.name) for r in results] == [("theflip_museum", "email")]
+
+
+def test_site_filter_visit_only() -> None:
+    results = run_checks(FACTS, site="theflip_museum_visit", transport=_router())
+    assert {r.site for r in results} == {"theflip_museum_visit"}
+    assert all(r.status is CheckStatus.OK for r in results)
+    assert len(results) == 7

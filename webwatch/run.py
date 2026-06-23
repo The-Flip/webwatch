@@ -18,13 +18,21 @@ from webwatch.result import CheckResult
 from webwatch.sources import registry as sources_registry
 from webwatch.sources.theflip_museum import CHECKS as THEFLIP_CHECKS
 from webwatch.sources.theflip_museum import SOURCE as THEFLIP_SOURCE
+from webwatch.sources.theflip_museum_visit import CHECKS as VISIT_CHECKS
+from webwatch.sources.theflip_museum_visit import SOURCE as VISIT_SOURCE
+
+_BUILTINS = [
+    (THEFLIP_SOURCE, THEFLIP_CHECKS),
+    (VISIT_SOURCE, VISIT_CHECKS),
+]
 
 
 def register_builtins() -> None:
     """Register the built-in sources and their checks (idempotent)."""
-    if sources_registry.get_source(THEFLIP_SOURCE.name) is None:
-        sources_registry.register_source(THEFLIP_SOURCE)
-        checks_registry.register(THEFLIP_SOURCE.name, THEFLIP_CHECKS)
+    for source, checks in _BUILTINS:
+        if sources_registry.get_source(source.name) is None:
+            sources_registry.register_source(source)
+            checks_registry.register(source.name, checks)
 
 
 def run_checks(

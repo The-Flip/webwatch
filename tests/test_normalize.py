@@ -56,6 +56,14 @@ def test_time_to_minutes_handles_12h_and_24h() -> None:
     assert normalize.time_to_minutes("12:30 AM") == 30
 
 
+def test_time_to_minutes_single_letter_meridiem() -> None:
+    """The museum site writes '10a'/'8p'; '8p' must be 20:00, not 08:00 (agy #1)."""
+    assert normalize.time_to_minutes("10a") == 600
+    assert normalize.time_to_minutes("8p") == 20 * 60
+    assert normalize.time_to_minutes("12p") == 12 * 60
+    assert normalize.time_to_minutes("12a") == 0
+
+
 def test_time_range_crossing_midnight() -> None:
     """A window that crosses midnight keeps a positive span (agy Gap D)."""
     assert normalize.time_range("6 PM - 2 AM") == (18 * 60, 26 * 60)

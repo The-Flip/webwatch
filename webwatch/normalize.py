@@ -50,7 +50,8 @@ _DIRECTIONALS = {
 # Hyphen, en dash, em dash — built via chr() to avoid ambiguous-unicode literals.
 _DASH_CLASS = re.escape("-" + chr(0x2013) + chr(0x2014))
 _TIME_RANGE_SEP = re.compile(rf"\s*(?:[{_DASH_CLASS}]|to)\s*", re.IGNORECASE)
-_TIME = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$", re.IGNORECASE)
+# Meridiem may be a/p, am/pm, or a.m./p.m. (the museum's site uses bare "10a"/"8p").
+_TIME = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?$", re.IGNORECASE)
 
 MINUTES_PER_DAY = 24 * 60
 
@@ -110,7 +111,7 @@ def postal_code(value: str) -> str:
 
 
 def time_to_minutes(value: str) -> int:
-    """Minutes since midnight for a clock time like ``"09:00"``, ``"9am"``, ``"5 PM"``.
+    """Minutes since midnight for a clock time like ``"09:00"``, ``"9am"``, ``"5 PM"``, ``"8p"``.
 
     Raises ``ValueError`` on anything it can't parse.
     """
@@ -123,7 +124,8 @@ def time_to_minutes(value: str) -> int:
     if meridiem:
         if not 1 <= hour <= 12:
             raise ValueError(f"invalid 12-hour time: {value!r}")
-        hour = hour % 12 + (12 if meridiem == "pm" else 0)
+        # Reduce to the first letter so "p", "pm", and "p.m." all mean PM.
+        hour = hour % 12 + (12 if meridiem[0] == "p" else 0)
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError(f"invalid time: {value!r}")
     return hour * 60 + minute
