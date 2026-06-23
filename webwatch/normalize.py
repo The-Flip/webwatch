@@ -145,27 +145,35 @@ def time_range(value: str) -> tuple[int, int]:
     return start, end
 
 
+def _window(item: object) -> tuple[int, int]:
+    """One opening window from a ``{"open","close"}`` mapping or a range string."""
+    if isinstance(item, str):
+        return time_range(item)
+    if isinstance(item, dict) and "open" in item and "close" in item:
+        open_min = time_to_minutes(str(item["open"]))
+        close_min = time_to_minutes(str(item["close"]))
+        if close_min <= open_min:
+            close_min += MINUTES_PER_DAY
+        return open_min, close_min
+    raise ValueError(f"hours window must be a range string or have open/close: {item!r}")
+
+
 def day_hours(value: object) -> frozenset[tuple[int, int]] | str:
     """Canonicalize one day's hours into a comparable form.
 
-    Accepts ``"closed"``, a single ``{"open": "10:00", "close": "17:00"}`` mapping,
-    or a list of such mappings (multiple windows in a day). Returns ``"closed"`` or
-    a ``frozenset`` of ``(open, close)`` minute tuples so order doesn't matter.
-    Raises ``ValueError`` on shapes it can't model.
+    Accepts ``"closed"``; a raw range string (``"10:00 - 20:00"``) or several
+    comma-separated ranges (``"9-12, 1-5"``); a single ``{"open","close"}`` mapping;
+    or a list of any of those. Returns ``"closed"`` or a ``frozenset`` of
+    ``(open, close)`` minute tuples so window order doesn't matter. This lets a
+    source emit the *visible* hours text while ``facts.yaml`` uses whichever form
+    is convenient — both normalize to the same value. Raises ``ValueError`` on
+    shapes it can't model (the caller maps that to ``PARSE_ERROR``).
     """
     if isinstance(value, str):
-        if value.strip().lower() == "closed":
+        text_value = value.strip()
+        if text_value.lower() == "closed":
             return "closed"
-        raise ValueError(f"unrecognized day hours string: {value!r}")
+        return frozenset(_window(part.strip()) for part in text_value.split(",") if part.strip())
 
     windows = value if isinstance(value, list) else [value]
-    parsed: set[tuple[int, int]] = set()
-    for window in windows:
-        if not isinstance(window, dict) or "open" not in window or "close" not in window:
-            raise ValueError(f"hours window must have open/close: {window!r}")
-        open_min = time_to_minutes(str(window["open"]))
-        close_min = time_to_minutes(str(window["close"]))
-        if close_min <= open_min:
-            close_min += MINUTES_PER_DAY
-        parsed.add((open_min, close_min))
-    return frozenset(parsed)
+    return frozenset(_window(window) for window in windows)

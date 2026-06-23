@@ -9,8 +9,9 @@ it is derived from the URL's host. This is a manual, network-using tool — it i
 never invoked by the test suite. Re-capturing a fixture after a site changes is
 how we notice the change: the affected extractor's tests then show what broke.
 
-Phase A note: this uses ``httpx`` directly. Once ``webwatch/fetch.py`` exists it
-should fetch through that boundary so capture and production share one path.
+Fetching goes through ``webwatch.fetch.fetch`` so a captured fixture sees the same
+User-Agent, timeout, and redirect behavior as a production run. If the page comes
+back blocked (a challenge/empty shell), we refuse to save it as a "golden" fixture.
 """
 
 from __future__ import annotations
@@ -22,8 +23,9 @@ from pathlib import Path
 
 import httpx
 
+from webwatch.fetch import fetch
+
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
-USER_AGENT = "webwatch/0.1 (+https://www.theflip.museum/; capturing a monitoring fixture)"
 
 
 def slugify(value: str) -> str:
@@ -39,13 +41,15 @@ def main(argv: list[str]) -> int:
     name = argv[1] if len(argv) > 1 else slugify(httpx.URL(url).host)
     today = dt.datetime.now(tz=dt.UTC).date().isoformat()
 
-    response = httpx.get(url, headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=30)
-    response.raise_for_status()
+    result = fetch(url)
+    if result.blocked:
+        print(f"Refusing to save: page looks blocked ({result.block_reason}).")
+        return 1
 
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIXTURES_DIR / f"{name}_{today}.html"
-    out.write_text(response.text, encoding="utf-8")
-    print(f"Saved {len(response.text):,} bytes to {out}")
+    out.write_text(result.text, encoding="utf-8")
+    print(f"Saved {len(result.text):,} bytes (HTTP {result.status_code}) to {out}")
     return 0
 
 

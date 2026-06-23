@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from webwatch.extract.anchors import Anchor, Found
 from webwatch.fetch import FetchResult, fetch
 
 
@@ -59,6 +60,17 @@ class Observed[T]:
     @classmethod
     def not_supported(cls, note: str = "") -> Observed[T]:
         return cls(reason=NotRead.NOT_SUPPORTED, note=note)
+
+    @classmethod
+    def from_anchor(cls, anchor: Anchor) -> Observed[str]:
+        """Convert an :class:`~webwatch.extract.anchors.Anchor` result honestly.
+
+        A located value becomes ``found``; a ``NotFound`` becomes ``missing`` (never
+        a guessed or empty value). Shared so every source maps anchors the same way.
+        """
+        if isinstance(anchor, Found):
+            return Observed.found(anchor.value)
+        return Observed.missing(anchor.reason)
 
     @property
     def is_found(self) -> bool:

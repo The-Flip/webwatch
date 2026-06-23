@@ -79,6 +79,30 @@ def test_day_hours_window_order_insensitive() -> None:
     assert a == b
 
 
+def test_day_hours_raw_string_equals_dict() -> None:
+    """A source's visible hours text and a facts dict must normalize equal (agy Gap C)."""
+    assert normalize.day_hours("10:00 - 20:00") == normalize.day_hours(
+        {"open": "10:00", "close": "20:00"}
+    )
+
+
+def test_day_hours_comma_separated_double_window() -> None:
+    raw = normalize.day_hours("09:00-12:00, 13:00-17:00")
+    structured = normalize.day_hours(
+        [{"open": "13:00", "close": "17:00"}, {"open": "09:00", "close": "12:00"}]
+    )
+    assert raw == structured
+
+
+def test_day_hours_raw_string_crosses_midnight() -> None:
+    assert normalize.day_hours("18:00 - 02:00") == frozenset({(18 * 60, 26 * 60)})
+
+
 def test_day_hours_rejects_bad_shape() -> None:
     with pytest.raises(ValueError):
         normalize.day_hours({"open": "09:00"})  # missing close
+
+
+def test_day_hours_rejects_unparseable_string() -> None:
+    with pytest.raises(ValueError):
+        normalize.day_hours("by appointment")

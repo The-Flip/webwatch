@@ -21,14 +21,15 @@ organization:
   phone: '+1 555 123 4567'
   email: 'hello@example.org'
   hours:
-    monday: closed
-    saturday: { open: '10:00', close: '17:00' } # 24h times
+    monday: '10:00 - 20:00' # a range string
+    saturday: { open: '10:00', close: '17:00' } # or an open/close map
+    sunday: closed
     # ...one entry per weekday
 ```
 
 Conventions:
 
-- Hours use 24-hour `"HH:MM"` strings, or the literal `closed`. A day with multiple windows may be a list of `{open, close}` maps.
+- Each day's hours may be written three ways, all equivalent after normalization (`normalize.day_hours`): a range string (`"10:00 - 20:00"`, or comma-separated for multiple windows `"9-12, 1-5"`), an `{open, close}` map, a list of either, or the literal `closed`. Times accept 24h (`"17:00"`) or 12h (`"5 PM"`), and windows may cross midnight (`"18:00 - 02:00"`).
 - Leave a value as `""` (empty) to mean "not yet verified — don't check this." Checks treat empty expected facts as `SKIPPED` rather than asserting against a blank.
 - `facts.py` validates the shape on load and fails loudly on a malformed file.
 
@@ -43,14 +44,18 @@ rules:
     type: recurring_event
     frequency: weekly
     weekday: saturday
+    start: '10:00' # event time matters — volunteer days run 10:00-16:00
+    end: '16:00'
     enabled: true
 ```
 
 ### Rule types
 
-| `type`            | Fields                 | Checks that…                                                       |
-| ----------------- | ---------------------- | ------------------------------------------------------------------ |
-| `recurring_event` | `frequency`, `weekday` | a matching recurring event appears in the site's observed schedule |
+| `type`            | Fields                                 | Checks that…                                                                           |
+| ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------- |
+| `recurring_event` | `frequency`, `weekday`, `start`, `end` | a matching recurring event (at the right time) appears in the site's observed schedule |
+
+For recurring events the **time** is significant, not just the day — `start`/`end` are 24h `"HH:MM"`. The rules engine that evaluates these against a site's observed schedule arrives in a later phase; the fields are captured now so the canonical expectation is recorded.
 
 This table grows as we add rule types (e.g. seasonal hours, one-off events). Add a new type by extending `rules.py` and documenting it here, with a plan reviewed per [plans/](plans/README.md).
 

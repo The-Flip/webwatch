@@ -7,36 +7,32 @@
 #
 # Schema and rule types are documented in docs/Facts.md.
 #
-# NOTE: the values below are PLACEHOLDERS marked TODO. They must be filled in
-# with the museum's real, verified details before the corresponding checks are
-# trusted. Until then, leave the matching checks disabled.
+# These are the museum's real, verified details. When something changes in the
+# real world, change it HERE first; webwatch then flags any site still showing the
+# old value. Leave a field empty ("") to mean "not verified — don't check it".
 
 organization:
   name: 'The Flip'
   url: 'https://www.theflip.museum/'
 
-  # TODO: fill in and verify against the real museum details.
   address:
-    street: '' # TODO
-    city: '' # TODO
-    region: '' # TODO (state/province)
-    postal_code: '' # TODO
+    street: '108 North State St, Suite 015'
+    city: 'Chicago'
+    region: 'IL'
+    postal_code: '60602'
     country: 'US'
 
-  # TODO: fill in real phone / email if we publish them.
-  phone: '' # TODO, e.g. "+1 555 123 4567"
-  email: '' # TODO
+  phone: '312-999-0153'
+  email: 'hello@theflip.museum'
 
-  # Weekly opening hours. Use 24h "HH:MM" times, or "closed".
-  # TODO: replace with the museum's real hours.
   hours:
-    monday: closed
-    tuesday: closed
-    wednesday: closed
-    thursday: closed
-    friday: closed
-    saturday: closed
-    sunday: closed
+    monday: '10:00 - 20:00'
+    tuesday: '10:00 - 20:00'
+    wednesday: '10:00 - 20:00'
+    thursday: '10:00 - 20:00'
+    friday: '10:00 - 20:00'
+    saturday: '10:00 - 20:00'
+    sunday: '11:00 - 18:00'
 
 # Dynamic expectations evaluated against observed events/schedules.
 # See docs/Facts.md for the full rule schema. These are examples to grow from.
@@ -46,4 +42,7 @@ rules:
     type: recurring_event
     frequency: weekly
     weekday: saturday
-    enabled: false # TODO: enable once the events source/check exists (Phase D)
+    # For recurring events the time matters: volunteer days run 10:00-16:00.
+    start: '10:00'
+    end: '16:00'
+    enabled: true
