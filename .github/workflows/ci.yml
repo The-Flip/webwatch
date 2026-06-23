@@ -1,0 +1,71 @@
+name: CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.vscode/**'
+      - '.idea/**'
+      - '.pre-commit-config.yaml'
+      - '.env.example'
+      - '.coderabbit.yaml'
+      - '.prettierrc'
+      - '.markdownlint.json'
+      - '.secrets.baseline'
+      - '.gitignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.vscode/**'
+      - '.idea/**'
+      - '.pre-commit-config.yaml'
+      - '.env.example'
+      - '.coderabbit.yaml'
+      - '.prettierrc'
+      - '.markdownlint.json'
+      - '.secrets.baseline'
+      - '.gitignore'
+      - 'LICENSE'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Fast checks first (fail fast)
+      - name: Check formatting
+        run: uv run ruff format . --check
+
+      - name: Run linting
+        run: uv run ruff check .
+
+      - name: Run type checking
+        run: uv run mypy webwatch
+
+      # Slower checks last
+      - name: Run tests
+        run: uv run pytest -m "not integration"

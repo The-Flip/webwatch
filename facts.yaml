@@ -1,0 +1,49 @@
+# Canonical facts about The Flip, and the dynamic rules we expect to hold.
+#
+# This file is the source of truth that web pages are checked against. It is
+# hand-maintained and reviewed in git — when the museum's real-world details
+# change, change them HERE first, then webwatch will flag any site still showing
+# the old information.
+#
+# Schema and rule types are documented in docs/Facts.md.
+#
+# NOTE: the values below are PLACEHOLDERS marked TODO. They must be filled in
+# with the museum's real, verified details before the corresponding checks are
+# trusted. Until then, leave the matching checks disabled.
+
+organization:
+  name: 'The Flip'
+  url: 'https://www.theflip.museum/'
+
+  # TODO: fill in and verify against the real museum details.
+  address:
+    street: '' # TODO
+    city: '' # TODO
+    region: '' # TODO (state/province)
+    postal_code: '' # TODO
+    country: 'US'
+
+  # TODO: fill in real phone / email if we publish them.
+  phone: '' # TODO, e.g. "+1 555 123 4567"
+  email: '' # TODO
+
+  # Weekly opening hours. Use 24h "HH:MM" times, or "closed".
+  # TODO: replace with the museum's real hours.
+  hours:
+    monday: closed
+    tuesday: closed
+    wednesday: closed
+    thursday: closed
+    friday: closed
+    saturday: closed
+    sunday: closed
+
+# Dynamic expectations evaluated against observed events/schedules.
+# See docs/Facts.md for the full rule schema. These are examples to grow from.
+rules:
+  - id: weekly-repair-day
+    description: 'Volunteer repair day every Saturday'
+    type: recurring_event
+    frequency: weekly
+    weekday: saturday
+    enabled: false # TODO: enable once the events source/check exists (Phase D)

@@ -1,0 +1,123 @@
+[project]
+name = "webwatch"
+version = "0.1.0"
+description = "Monitors the web presence of The Flip pinball museum for correct, in-sync information"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "click>=8.4.1",
+    "extruct>=0.18.0",
+    "httpx>=0.28.1",
+    "lxml>=6.1.1",
+    "python-decouple>=3.8",
+    "pyyaml>=6.0.3",
+]
+
+# The `webwatch` command. After `uv sync` it lives at `.venv/bin/webwatch`
+# (run via `uv run webwatch`); `uv tool install --editable .` puts it on PATH.
+[project.scripts]
+webwatch = "webwatch.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["webwatch"]
+
+[dependency-groups]
+# Installed with `uv sync` (default); skip with `uv sync --no-dev`.
+dev = [
+    "detect-secrets>=1.5.0",
+    "freezegun>=1.5.5",
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.18",
+    "types-pyyaml>=6.0.12.20260518",
+]
+
+[tool.ruff]
+target-version = "py314"
+
+# Line length to match common Python conventions.
+line-length = 100
+
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "S",   # flake8-bandit (security)
+    "T20", # flake8-print
+    "RUF", # Ruff-specific rules
+]
+
+ignore = [
+    "E501",  # Line too long (handled by the formatter)
+    "S101",  # Use of assert (okay in tests)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["S101", "S105", "S106"]  # asserts and dummy secrets are fine in tests
+"scripts/*.py" = ["T201"]                # allow print in build/CLI scripts
+
+[tool.ruff.lint.isort]
+known-first-party = ["webwatch"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.14"
+# Permissive to start — tighten as the codebase grows.
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+# Suppress noise from third-party packages that ship no type stubs.
+disable_error_code = ["import-untyped", "import-not-found"]
+
+[tool.pytest.ini_options]
+# Package lives at the repo root (not installed), so put it on the import path.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "integration: tests that fetch live websites (excluded from the fast suite)",
+]
+
+[tool.coverage.run]
+source = ["webwatch"]
+omit = ["tests/*", "*/__pycache__/*", ".venv/*"]
+
+[tool.coverage.report]
+# Raise this floor as test coverage improves.
+fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]

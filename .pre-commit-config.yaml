@@ -1,0 +1,96 @@
+# Pre-commit hooks configuration
+# Install with: uv run pre-commit install && uv run pre-commit install --hook-type pre-push
+# Run manually: uv run pre-commit run --all-files
+# See https://pre-commit.com for more information
+
+repos:
+  # Ruff - fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Prettier - CSS, JSON, and Markdown formatter
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.7.4
+    hooks:
+      - id: prettier
+        types_or: [markdown, yaml, json]
+
+  # Prevent commits to main
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+
+  # Security checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
+  # Basic file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.(csv|md|html)$|^tests/fixtures/'
+      - id: end-of-file-fixer
+        exclude: '\.(csv|md|html)$|^tests/fixtures/'
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=2000']
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+        exclude: '\.csv$|^tests/fixtures/'
+
+  # Local hooks that run through uv (so they use the project's pinned tools)
+  - repo: local
+    hooks:
+      # Type checking
+      - id: mypy
+        name: mypy
+        entry: uv run mypy webwatch
+        language: system
+        types: [python]
+        args: [--config-file=pyproject.toml]
+        pass_filenames: false
+        require_serial: true
+
+      # Regenerate agent docs when the source or build script changes
+      - id: agent-docs
+        name: agent-docs
+        entry: bash -c 'uv run python scripts/build_agent_docs.py && git add CLAUDE.md AGENTS.md'
+        language: system
+        files: ^(docs/AGENTS\.src\.md|scripts/build_agent_docs\.py)$
+        pass_filenames: false
+
+      # Block direct edits to generated agent docs (unless source or script also changed)
+      - id: agent-docs-no-direct-edit
+        name: agent-docs-no-direct-edit
+        entry: scripts/check_agent_docs_edit.sh
+        language: system
+        files: ^(CLAUDE|AGENTS)\.md$
+        exclude: ^docs/
+        stages: [pre-commit]
+
+      # Run the fast test suite before push
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -m "not integration"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

@@ -1,0 +1,49 @@
+# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+__pycache__/
+*.pyc
+
+# Virtual environment / uv
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Testing / coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Linting / type-checking caches
+.ruff_cache/
+.mypy_cache/
+
+# Logs and local data
+*.log
+
+# Webwatch runtime state (per-run check status; not source)
+state.json
+/reports/
+
+# IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude Code's local settings
+.claude/settings.local.json
