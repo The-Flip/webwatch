@@ -12,7 +12,7 @@ from webwatch.facts import load_facts
 from webwatch.result import CheckStatus
 from webwatch.sources.theflip_museum_visit import CHECKS, SOURCE, expand_days
 
-FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-06-23.html"
+FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-06-24.html"
 FACTS = load_facts("facts.yaml")
 
 

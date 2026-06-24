@@ -10,7 +10,7 @@ from webwatch.result import CheckStatus
 from webwatch.rules import evaluate
 from webwatch.sources.base import Observed
 
-FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-06-23.html"
+FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-06-24.html"
 SITE = "test"
 
 
@@ -40,19 +40,30 @@ def _repair(**overrides: object) -> Event:
     return Event(**fields)  # type: ignore[arg-type]
 
 
-def test_golden_fixture_flags_weekday_and_time() -> None:
-    """The committed page lists the repair day on Friday at a placeholder time."""
+def test_golden_fixture_is_ok() -> None:
+    """The committed page now lists the repair day correctly (Saturday, 10-5)."""
     events = extract_events(FIXTURE.read_text(encoding="utf-8"))
     rule = load_facts("facts.yaml").rules[0]
     result = evaluate(rule, Observed.found(events), site=SITE)
-    assert result.status is CheckStatus.MISMATCH
-    assert "Friday" in result.summary
-    assert "3:22 PM" in result.summary
+    assert result.status is CheckStatus.OK, result.summary
 
 
 def test_correct_event_is_ok() -> None:
     result = evaluate(_rule(), _events(_repair()), site=SITE)
     assert result.status is CheckStatus.OK
+
+
+def test_range_time_matching_window_is_ok() -> None:
+    rule = _rule(start="10:00", end="17:00")
+    result = evaluate(rule, _events(_repair(time="10:00 AM - 5:00 PM")), site=SITE)
+    assert result.status is CheckStatus.OK
+
+
+def test_range_time_end_mismatch_is_mismatch() -> None:
+    rule = _rule(start="10:00", end="16:00")
+    result = evaluate(rule, _events(_repair(time="10:00 AM - 5:00 PM")), site=SITE)
+    assert result.status is CheckStatus.MISMATCH
+    assert "end" in result.summary
 
 
 def test_expected_event_absent_is_mismatch() -> None:

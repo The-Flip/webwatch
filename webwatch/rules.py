@@ -26,6 +26,22 @@ def _match_events(events: list[Event], keyword: str) -> list[Event]:
     return [e for e in events if keyword in e.description.lower()]
 
 
+def _event_window(text: str) -> tuple[int, int | None]:
+    """Parse an event time that may be a single start or a ``start - end`` range.
+
+    Returns ``(start_minutes, end_minutes_or_None)``. Raises ``ValueError`` only
+    when the text is not a time at all (the caller maps that to ``PARSE_ERROR``).
+    """
+    try:
+        return normalize.time_range(text)
+    except ValueError:
+        return normalize.time_to_minutes(text), None
+
+
+def _hhmm(minutes: int) -> str:
+    return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
+
+
 def evaluate(rule: Rule, observed_events: Observed[list[Event]], *, site: str) -> CheckResult:
     """Evaluate one rule against a source's observed events, as a CheckResult."""
     name = rule.id
@@ -66,20 +82,25 @@ def evaluate(rule: Rule, observed_events: Observed[list[Event]], *, site: str) -
         if normalize.text(event.weekday) != normalize.text(expected_weekday):
             problems.append(f"weekday {event.weekday} (expected {expected_weekday})")
 
+    expected_end = str(rule.params.get("end", "")).strip()
     if expected_start:
         if not event.time:
             return CheckResult.structure_changed(
                 site, name, detail=f"event {event.title!r} shows no time"
             )
         try:
-            event_minutes = normalize.time_to_minutes(event.time)
-            expected_minutes = normalize.time_to_minutes(expected_start)
+            event_start, event_end = _event_window(event.time)
+            expected_start_min = normalize.time_to_minutes(expected_start)
+            expected_end_min = normalize.time_to_minutes(expected_end) if expected_end else None
         except ValueError as err:
             return CheckResult.parse_error(
                 site, name, detail=f"could not parse event time {event.time!r}: {err}"
             )
-        if event_minutes != expected_minutes:
-            problems.append(f"start {event.time} (expected {expected_start})")
+        if event_start != expected_start_min:
+            problems.append(f"start {_hhmm(event_start)} (expected {expected_start})")
+        # Compare the end only when both the rule and the event provide one.
+        if expected_end_min is not None and event_end is not None and event_end != expected_end_min:
+            problems.append(f"end {_hhmm(event_end)} (expected {expected_end})")
 
     expected = f"{event.title} on {expected_weekday} at {expected_start}".strip()
     observed = f"{event.title} on {event.weekday or '?'} at {event.time or '?'}"
