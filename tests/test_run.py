@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -12,9 +14,12 @@ from webwatch.result import CheckStatus
 from webwatch.run import run_checks
 
 FIXTURES = Path(__file__).parent / "fixtures"
-HOME = (FIXTURES / "theflip_museum_2026-06-23.html").read_text(encoding="utf-8")
+HOME = (FIXTURES / "theflip_museum_2026-06-24.html").read_text(encoding="utf-8")
 VISIT = (FIXTURES / "theflip_museum_visit_2026-06-24.html").read_text(encoding="utf-8")
 FACTS = load_facts("facts.yaml")
+# Pinned to the fixtures' capture date so the expired-events check is deterministic
+# (the listed events — Jun 27, Jul 4, Jul 11 — are all upcoming as of this date).
+NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=ZoneInfo("America/Chicago"))
 
 
 def _router() -> httpx.MockTransport:
@@ -30,13 +35,14 @@ def _router() -> httpx.MockTransport:
 def test_all_checks_ok_against_fixtures() -> None:
     from webwatch.result import EXIT_OK, exit_code
 
-    results = run_checks(FACTS, transport=_router())
-    # Field checks AND the recurring-event rule all pass against the current page.
+    results = run_checks(FACTS, transport=_router(), now=NOW)
+    # Field checks, the recurring-event rule, AND the expired-events check all pass.
     assert all(r.status is CheckStatus.OK for r in results), [
         (r.site, r.name, r.status) for r in results if r.status is not CheckStatus.OK
     ]
     assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit"}
     assert any(r.name == "weekly-repair-day" for r in results)
+    assert any(r.name == "expired_events" for r in results)
     assert exit_code(results) == EXIT_OK
 
 
@@ -62,14 +68,24 @@ def test_fact_filter_runs_one_check() -> None:
 
 
 def test_site_filter_visit_only() -> None:
-    results = run_checks(FACTS, site="theflip_museum_visit", transport=_router())
+    results = run_checks(FACTS, site="theflip_museum_visit", transport=_router(), now=NOW)
     assert {r.site for r in results} == {"theflip_museum_visit"}
-    # 7 hours checks + the recurring-event rule, all OK against the current page.
-    assert len(results) == 8
+    # 7 hours checks + the recurring-event rule + the expired-events check, all OK.
+    assert len(results) == 9
     assert all(r.status is CheckStatus.OK for r in results)
 
 
 def test_fact_filter_targets_a_rule_by_id() -> None:
-    results = run_checks(FACTS, fact="weekly-repair-day", transport=_router())
-    assert [(r.site, r.name) for r in results] == [("theflip_museum_visit", "weekly-repair-day")]
-    assert results[0].status is CheckStatus.OK
+    results = run_checks(FACTS, fact="weekly-repair-day", transport=_router(), now=NOW)
+    # The rule runs on every events-providing source (both pages list the repair day).
+    assert {(r.site, r.name) for r in results} == {
+        ("theflip_museum", "weekly-repair-day"),
+        ("theflip_museum_visit", "weekly-repair-day"),
+    }
+    assert all(r.status is CheckStatus.OK for r in results)
+
+
+def test_fact_filter_targets_expired_events() -> None:
+    results = run_checks(FACTS, fact="expired_events", transport=_router(), now=NOW)
+    assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit"}
+    assert all(r.name == "expired_events" and r.status is CheckStatus.OK for r in results)

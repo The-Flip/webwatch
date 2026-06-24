@@ -17,7 +17,7 @@ from webwatch.sources.base import NotRead
 from webwatch.sources.theflip_museum import CHECKS, SOURCE
 
 FIXTURES = Path(__file__).parent / "fixtures"
-FIXTURE = "theflip_museum_2026-06-23.html"
+FIXTURE = "theflip_museum_2026-06-24.html"
 FACTS = load_facts("facts.yaml")
 
 

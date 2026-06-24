@@ -13,6 +13,7 @@ dependencies = [
     "lxml>=6.1.1",
     "python-decouple>=3.8",
     "pyyaml>=6.0.3",
+    "tzdata>=2026.2",
 ]
 
 # The `webwatch` command. After `uv sync` it lives at `.venv/bin/webwatch`

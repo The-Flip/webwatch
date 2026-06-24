@@ -31,6 +31,9 @@ HTTP_DOMAIN_DELAY: float = config("WEBWATCH_HTTP_DOMAIN_DELAY", default=1.0, cas
 
 # --- Facts & state ---
 
+#: The museum's local timezone — "midnight of the day an event ends" is local midnight.
+TIMEZONE: str = config("WEBWATCH_TIMEZONE", default="America/Chicago")
+
 #: Path to the canonical expected facts and dynamic rules.
 FACTS_PATH: str = config("WEBWATCH_FACTS_PATH", default="facts.yaml")
 

@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 
 from webwatch import normalize
 from webwatch.checks.registry import Check
+from webwatch.events import extract_events
 from webwatch.extract import structured
 from webwatch.sources.base import Observation, Observed, Source
 
@@ -55,6 +56,7 @@ class TheFlipMuseum(Source):
     name = "theflip_museum"
     url = "https://www.theflip.museum/"
     tracks = frozenset({"name", "email", *_ADDRESS_FIELDS})
+    provides_events = True
 
     def observe(self, html: str) -> Observation:
         node = _museum_node(html)
@@ -68,7 +70,13 @@ class TheFlipMuseum(Source):
         fields = {
             field: self._corroborate(field, value, node, visible) for field, value in raw.items()
         }
-        return Observation(self.site, fields)
+        parsed = extract_events(html)
+        events: Observed[Any] = (
+            Observed.found(parsed)
+            if parsed is not None
+            else Observed.missing("no upcoming events section found")
+        )
+        return Observation(self.site, fields, events=events)
 
     @staticmethod
     def _corroborate(
