@@ -90,17 +90,16 @@ command and isn't used here). See [docs/Operations.md](docs/Operations.md) for t
 ```cron
 # Daily at 7am — run the checks, update state, and email ONLY when something changes
 # (a check newly fails or recovers).
-0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify --send >> /var/log/webwatch.log 2>&1
+0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
 
 # Monday at 8am — email a standing summary of everything still open, so a long-running
 # problem doesn't go silent after its one `notify` alert. Reads saved state; no re-scrape.
-0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest --send >> /var/log/webwatch.log 2>&1
+0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
 ```
 
-The `--send` flag is required to actually deliver — it overrides the dry-run default, so the cron
-jobs send regardless of `WEBWATCH_EMAIL_DRY_RUN`. Without it, both commands only _preview_ the email
-(printing it to the log), which is useful for a manual trial but means a bare cron entry would never
-notify anyone.
+**These only deliver when `WEBWATCH_EMAIL_DRY_RUN=false` in the environment.** It defaults to `true`
+(dry-run), so a bare cron entry would just print the email to the log and never notify anyone — set
+it to `false` in `.env` (or the crontab) so the jobs actually send.
 
 `notify` and `digest` are independent: **`notify` never sends the weekly summary**, and the digest
 runs **only when its own cron line fires** (the `0 8 * * 1` above = Mondays at 08:00; change it to
@@ -108,8 +107,8 @@ whatever cadence you want). If you install only the `notify` line, you'll get on
 periodic digest. The digest reflects the state from the most recent `notify` run.
 
 Both need: the working directory to hold `facts.yaml` and a writable `state.json`, and the
-environment (`.env` or the crontab) to provide the SMTP settings. With `--send` in the cron lines you
-don't also need `WEBWATCH_EMAIL_DRY_RUN=false`. Verify delivery first with `webwatch notify --test --send`.
+environment (`.env` or the crontab) to provide the SMTP settings with `WEBWATCH_EMAIL_DRY_RUN=false`.
+Verify delivery first with `webwatch notify --test --send`.
 
 ## Documentation
 
