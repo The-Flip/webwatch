@@ -80,3 +80,43 @@ def test_facts_show() -> None:
     assert result.exit_code == 0
     assert "Organization: The Flip" in result.output
     assert "Rules:" in result.output
+
+
+# --- notify (cron entry point) ------------------------------------------------
+
+
+def _seed_notify(monkeypatch: pytest.MonkeyPatch, tmp_path, result: CheckResult) -> None:
+    """Point notify at a temp state file, alert after one failure, never hit SMTP."""
+    monkeypatch.setattr(cli_module, "run_checks", lambda *a, **k: [result])
+    monkeypatch.setattr("webwatch.config.STATE_PATH", str(tmp_path / "state.json"))
+    monkeypatch.setattr("webwatch.config.ALERT_AFTER_FAILURES", 1)
+    monkeypatch.setattr("webwatch.config.EMAIL_DRY_RUN", True)
+    monkeypatch.setattr("webwatch.notify.email.smtplib.SMTP", _explode)
+
+
+def _explode(*_a: object, **_k: object) -> object:
+    raise AssertionError("default notify must never contact SMTP")
+
+
+def test_notify_alerts_on_first_failure_then_quiet(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    mismatch = CheckResult.mismatch("s", "hours", expected="9-5", observed="10-6")
+    _seed_notify(monkeypatch, tmp_path, mismatch)
+
+    first = CliRunner().invoke(cli, ["notify"])
+    assert first.exit_code == EXIT_DATA_PROBLEM
+    assert "dry-run" in first.output and "s/hours" in first.output
+    assert (tmp_path / "state.json").exists()
+
+    # Second identical run: already alerting, so no new transition -> no email.
+    second = CliRunner().invoke(cli, ["notify"])
+    assert "No notifications to send" in second.output
+
+
+def test_notify_no_transitions_when_all_ok(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    ok = CheckResult.ok("s", "hours", expected=1, observed=1)
+    _seed_notify(monkeypatch, tmp_path, ok)
+    result = CliRunner().invoke(cli, ["notify"])
+    assert result.exit_code == EXIT_OK
+    assert "No notifications to send" in result.output

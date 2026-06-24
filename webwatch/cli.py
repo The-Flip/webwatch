@@ -2,22 +2,26 @@
 
 Thin layer: parse arguments, call :mod:`webwatch.run`, render with
 :mod:`webwatch.report`, and exit with the code from :func:`webwatch.result.exit_code`.
-Notification on state transitions is wired in a later phase; for now ``check``
-reports and exits.
+``check`` reports and is side-effect-free; ``notify`` (the cron entry point) also
+tracks state and emails on transitions.
 """
 
 from __future__ import annotations
 
+import smtplib
+
 import click
 
-from webwatch import __version__
+from webwatch import __version__, config
 from webwatch import facts as facts_module
 from webwatch.checks import registry as checks_registry
 from webwatch.facts import FactsError
+from webwatch.notify.email import render_email, send_from_config
 from webwatch.report import render_json, render_text
 from webwatch.result import exit_code
 from webwatch.run import register_builtins, run_checks
 from webwatch.sources import registry as sources_registry
+from webwatch.state import apply_results, load_state, save_state
 
 
 @click.group()
@@ -94,6 +98,45 @@ def facts(validate: bool) -> None:
     for rule in loaded.rules:
         state = "enabled" if rule.enabled else "disabled"
         click.echo(f"  - {rule.id} ({rule.type}, {state})")
+
+
+@cli.command()
+@click.option(
+    "--dry-run/--send",
+    "dry_run",
+    default=None,
+    help="Print the email instead of sending it (default: WEBWATCH_EMAIL_DRY_RUN).",
+)
+def notify(dry_run: bool | None) -> None:
+    """Run checks, update state, and email on state transitions (the cron entry point).
+
+    Email fires only when a check newly fails or recovers, after the configured
+    consecutive-failure threshold. Exit code matches ``check``.
+    """
+    try:
+        facts = facts_module.load_facts()
+    except FactsError as err:
+        raise click.ClickException(str(err)) from err
+
+    results = run_checks(facts)
+    click.echo(render_text(results))
+
+    previous = load_state()
+    new_state, transitions = apply_results(previous, results)
+    save_state(new_state)
+
+    content = render_email(transitions, results)
+    if content is None:
+        click.echo("No notifications to send (no state transitions).")
+    else:
+        resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
+        try:
+            if send_from_config(content, dry_run=resolved_dry_run, printer=click.echo):
+                click.echo("Notification email sent.")
+        except smtplib.SMTPException as err:
+            click.echo(f"Warning: failed to send notification email: {err}", err=True)
+
+    raise SystemExit(exit_code(results))
 
 
 def main() -> None:

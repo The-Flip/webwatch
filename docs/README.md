@@ -10,6 +10,7 @@ The development documentation for Webwatch, which monitors The Flip's web presen
 - **[Checks.md](Checks.md)** — How to add a new site, source, and checks (with fixtures)
 - **[Python.md](Python.md)** — Python coding rules (uv, secrets, linting, error handling)
 - **[Testing.md](Testing.md)** — Test patterns, mocking HTTP, fixtures, integration tests
+- **[Operations.md](Operations.md)** — Running from cron: the `notify` entry point, email, state, exit codes
 - **[plans/](plans/README.md)** — Design docs, reviewed by `agy` before implementation
 
 The agent-facing guides [`CLAUDE.md`](../CLAUDE.md) and [`AGENTS.md`](../AGENTS.md) are **generated** from [`AGENTS.src.md`](AGENTS.src.md). Edit the source and run `make agent-docs`; never edit the generated files directly.

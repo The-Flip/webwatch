@@ -63,7 +63,7 @@ webwatch check --all                 # run every check, print a report, set the 
 webwatch check --site theflip_museum # just one site
 webwatch list                        # list registered sites and checks
 webwatch facts --validate            # show / validate the loaded facts.yaml + rules
-webwatch notify --dry-run            # preview the email that would be sent
+webwatch notify --dry-run            # run, update state, and preview the email (no send)
 ```
 
 Exit codes: `0` all OK · `1` at least one `MISMATCH` (data out of sync) · `2` at least one checker
@@ -72,9 +72,12 @@ treat "data wrong" differently from "our checker broke."
 
 ## Running from cron
 
+Use `webwatch notify` (it tracks state and emails on transitions); `check` is the side-effect-free
+interactive command. See [docs/Operations.md](docs/Operations.md).
+
 ```cron
 # Check every morning at 7am; email fires only on state transitions.
-0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch check --all >> /var/log/webwatch.log 2>&1
+0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
 ```
 
 ## Documentation
