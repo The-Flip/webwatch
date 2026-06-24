@@ -144,3 +144,17 @@ def mark_notified(state: State, transitions: list[Transition]) -> None:
             check_state = state.get(_key(transition.site, transition.name))
             if check_state is not None:
                 check_state.notified = True
+
+
+def alerting_checks(state: State) -> list[tuple[str, str, str]]:
+    """Every currently-alerting check as ``(site, name, last_status)``, sorted.
+
+    These are the persistent, threshold-crossed problems — what the periodic digest
+    summarizes (read-only; no re-scrape).
+    """
+    open_problems = []
+    for key, check_state in state.items():
+        if check_state.alerting:
+            site, _, name = key.partition("\t")
+            open_problems.append((site, name, check_state.status))
+    return sorted(open_problems)

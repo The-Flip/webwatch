@@ -64,6 +64,8 @@ webwatch check --site theflip_museum # just one site
 webwatch list                        # list registered sites and checks
 webwatch facts --validate            # show / validate the loaded facts.yaml + rules
 webwatch notify --dry-run            # run, update state, and preview the email (no send)
+webwatch notify --test --send        # send a one-off test email to verify SMTP
+webwatch digest --dry-run            # preview a summary of all still-open problems (from saved state)
 ```
 
 Exit codes: `0` all OK · `1` at least one `MISMATCH` (data out of sync) · `2` at least one checker

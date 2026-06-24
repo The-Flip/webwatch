@@ -16,12 +16,12 @@ from webwatch import __version__, config
 from webwatch import facts as facts_module
 from webwatch.checks import registry as checks_registry
 from webwatch.facts import FactsError
-from webwatch.notify.email import EmailContent, render_email, send_from_config
+from webwatch.notify.email import EmailContent, render_digest, render_email, send_from_config
 from webwatch.report import render_json, render_text
 from webwatch.result import exit_code
 from webwatch.run import register_builtins, run_checks
 from webwatch.sources import registry as sources_registry
-from webwatch.state import apply_results, load_state, mark_notified, save_state
+from webwatch.state import alerting_checks, apply_results, load_state, mark_notified, save_state
 
 
 @click.group()
@@ -164,6 +164,41 @@ def notify(dry_run: bool | None, send_test: bool) -> None:
     # Save after the send attempt so `notified` reflects whether it succeeded.
     save_state(new_state)
     raise SystemExit(exit_code(results))
+
+
+@cli.command()
+@click.option(
+    "--dry-run/--send",
+    "dry_run",
+    default=None,
+    help="Print the email instead of sending it (default: WEBWATCH_EMAIL_DRY_RUN).",
+)
+@click.option(
+    "--only-problems",
+    is_flag=True,
+    help="Send nothing when there are no open problems (suppress the all-clear heartbeat).",
+)
+def digest(dry_run: bool | None, only_problems: bool) -> None:
+    """Email a standing summary of currently-open problems (read from saved state).
+
+    Reads the state that ``notify`` maintains — it does *not* re-run checks — and
+    lists every check still alerting. Run on a slower cadence (e.g. weekly)
+    alongside daily ``notify``. Exits 0 whenever the digest is delivered, even if it
+    lists problems; a non-zero exit means the tool itself failed.
+    """
+    state = load_state()
+    open_problems = alerting_checks(state)
+    if only_problems and not open_problems:
+        click.echo("No open problems; nothing to send.")
+        return
+
+    content = render_digest(open_problems, total=len(state))
+    resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
+    try:
+        if send_from_config(content, dry_run=resolved_dry_run, printer=click.echo):
+            click.echo("Digest email sent.")
+    except (smtplib.SMTPException, OSError) as err:
+        raise click.ClickException(f"failed to send digest email: {err}") from err
 
 
 def main() -> None:

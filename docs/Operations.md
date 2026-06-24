@@ -8,6 +8,10 @@ How webwatch runs in production: the cron entry, notifications, state, and exit 
   (no state, no email). Use it interactively or in CI.
 - **`webwatch notify`** — the **cron entry point**. Runs the checks, updates run-to-run state, and
   emails when a check _transitions_ (newly fails or recovers). Same exit codes as `check`.
+- **`webwatch digest`** — a standing summary of every check still open, read from the saved state
+  (it does _not_ re-run checks). Run on a slower cadence than `notify` so persistent problems don't
+  fall silent after their one transition email. `--only-problems` suppresses the all-clear heartbeat.
+  Exits 0 whenever it delivers (even with problems); non-zero only on a tool failure.
 
 ## Exit codes
 
@@ -70,8 +74,12 @@ Run `notify` on a schedule. Provide the environment (via `.env` or the crontab) 
 working directory holds `facts.yaml` and the writable `state.json`:
 
 ```cron
-# Check every morning at 7am; email fires only on transitions.
+# Daily at 7am: run checks, update state, email on any change.
 0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
+
+# Monday at 8am: email a standing summary of anything still open (no re-scrape).
+0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
 ```
 
-Inspect the latest run by hand any time with `webwatch check`.
+`notify` gives immediate on-change alerts; `digest` reminds you of unresolved problems on a slower
+cadence. Inspect the latest run by hand any time with `webwatch check`.

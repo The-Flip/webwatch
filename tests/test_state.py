@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from webwatch.result import CheckResult
-from webwatch.state import apply_results, load_state, mark_notified, save_state
+from webwatch.state import alerting_checks, apply_results, load_state, mark_notified, save_state
 
 
 def _mismatch() -> CheckResult:
@@ -84,3 +84,12 @@ def test_alert_refires_until_notified() -> None:
     # do NOT mark_notified -> simulate a failed send
     state, second = apply_results(state, [_mismatch()], alert_after=1, recover_after=1)
     assert [t.kind for t in second] == ["alert"]
+
+
+def test_alerting_checks_lists_only_alerting() -> None:
+    results = [
+        CheckResult.mismatch("site", "hours", expected="9-5", observed="10-6"),
+        CheckResult.ok("site", "address", expected="x", observed="x"),
+    ]
+    state, _ = apply_results({}, results, alert_after=1, recover_after=1)
+    assert alerting_checks(state) == [("site", "hours", "mismatch")]

@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 
 import webwatch.notify.email as mail
-from webwatch.notify.email import EmailContent, render_email, send
+from webwatch.notify.email import EmailContent, render_digest, render_email, send
 from webwatch.result import CheckResult, CheckStatus
 from webwatch.state import Transition
 
@@ -38,6 +38,19 @@ def test_render_email_recovery_only() -> None:
     assert content is not None
     assert "recovered" in content.subject
     assert "recovered" in content.body
+
+
+def test_render_digest_lists_open_problems() -> None:
+    content = render_digest([("site", "hours", "mismatch"), ("site", "addr", "blocked")], total=5)
+    assert "2 open problem" in content.subject
+    assert "site/hours [mismatch]" in content.body
+    assert "site/addr [blocked]" in content.body
+
+
+def test_render_digest_all_clear() -> None:
+    content = render_digest([], total=5)
+    assert "all clear" in content.subject
+    assert "all 5" in content.body
 
 
 # --- send: safe by default ----------------------------------------------------

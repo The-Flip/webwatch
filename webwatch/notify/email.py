@@ -57,6 +57,23 @@ def render_email(transitions: list[Transition], results: list[CheckResult]) -> E
     return EmailContent(subject, "\n".join(lines).rstrip())
 
 
+def render_digest(open_problems: list[tuple[str, str, str]], total: int) -> EmailContent:
+    """A standing status snapshot: the currently-open problems, or an all-clear.
+
+    ``open_problems`` is ``(site, name, status)`` for each alerting check (from
+    ``state.alerting_checks``); ``total`` is the number of tracked checks. Always
+    returns content — unlike :func:`render_email`, the digest is a heartbeat.
+    """
+    if open_problems:
+        subject = f"[webwatch] status digest: {len(open_problems)} open problem(s)"
+        lines = [f"{len(open_problems)} of {total} tracked check(s) currently failing:"]
+        lines += [f"  - {site}/{name} [{status}]" for site, name, status in open_problems]
+    else:
+        subject = "[webwatch] status digest: all clear"
+        lines = [f"No open problems — all {total} tracked check(s) healthy."]
+    return EmailContent(subject, "\n".join(lines))
+
+
 def _recipient_list(recipients: str | Iterable[str]) -> list[str]:
     if isinstance(recipients, str):
         return [r.strip() for r in recipients.split(",") if r.strip()]

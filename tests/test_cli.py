@@ -16,6 +16,7 @@ from webwatch import __version__
 from webwatch import cli as cli_module
 from webwatch.cli import cli
 from webwatch.result import EXIT_DATA_PROBLEM, EXIT_OK, CheckResult
+from webwatch.state import CheckState, save_state
 
 
 def test_version() -> None:
@@ -171,3 +172,54 @@ def test_notify_retries_when_send_fails(
     # The alert wasn't recorded as notified, so it re-fires (and re-fails) next run.
     second = CliRunner().invoke(cli, ["notify", "--send"])
     assert "failed to send" in second.output
+
+
+# --- digest (periodic status summary) ----------------------------------------
+
+
+def _seed_state(monkeypatch: pytest.MonkeyPatch, tmp_path, state: dict) -> object:
+    path = tmp_path / "state.json"
+    save_state(state, path)
+    monkeypatch.setattr("webwatch.config.STATE_PATH", str(path))
+    monkeypatch.setattr("webwatch.config.EMAIL_DRY_RUN", True)
+    monkeypatch.setattr("webwatch.notify.email.smtplib.SMTP", _explode)
+    return path
+
+
+def test_digest_lists_open_problems_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    path = _seed_state(
+        monkeypatch, tmp_path, {"s\thours": CheckState(status="mismatch", alerting=True)}
+    )
+    before = path.read_text(encoding="utf-8")
+    result = CliRunner().invoke(cli, ["digest"])
+    assert result.exit_code == 0  # exit 0 even though a problem is listed
+    assert "open problem" in result.output and "s/hours" in result.output
+    assert path.read_text(encoding="utf-8") == before  # digest never writes state
+
+
+def test_digest_all_clear_when_nothing_alerting(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _seed_state(monkeypatch, tmp_path, {"s\thours": CheckState(status="ok", alerting=False)})
+    result = CliRunner().invoke(cli, ["digest"])
+    assert result.exit_code == 0
+    assert "all clear" in result.output
+
+
+def test_digest_only_problems_suppresses_all_clear(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    _seed_state(monkeypatch, tmp_path, {})
+    result = CliRunner().invoke(cli, ["digest", "--only-problems"])
+    assert result.exit_code == 0
+    assert "nothing to send" in result.output
+
+
+def test_digest_send_failure_is_clean_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _seed_state(monkeypatch, tmp_path, {"s\thours": CheckState(status="mismatch", alerting=True)})
+
+    def boom(*_a: object, **_k: object) -> bool:
+        raise smtplib.SMTPException("bad creds")
+
+    monkeypatch.setattr(cli_module, "send_from_config", boom)
+    result = CliRunner().invoke(cli, ["digest", "--send"])
+    assert result.exit_code != 0
+    assert "failed to send digest" in result.output
