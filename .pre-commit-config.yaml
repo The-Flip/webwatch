@@ -3,6 +3,11 @@
 # Run manually: uv run pre-commit run --all-files
 # See https://pre-commit.com for more information
 
+# Hooks run at the pre-commit stage by default; only those with an explicit
+# `stages:` run elsewhere. This keeps pre-push to just the test suite and stops the
+# commit guards (e.g. no-commit-to-branch) from blocking a legitimate push of main.
+default_stages: [pre-commit]
+
 repos:
   # Ruff - fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
