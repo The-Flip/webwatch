@@ -36,8 +36,18 @@ point — it prevents both false alarms and silent misses. See
 make bootstrap
 ```
 
-This syncs dependencies with `uv`, installs pre-commit hooks, and creates `.env` from
-`.env.example`. Then edit `.env` to configure SMTP (for email alerts) and runtime options.
+This syncs dependencies with `uv`, installs the pre-commit and pre-push git hooks, and creates
+`.env` from `.env.example`.
+
+Then configure:
+
+- **`.env`** — SMTP settings for email alerts and runtime options. For email, use `SMTP_PORT=587`
+  (port 25 is blocked on most hosts) and set `WEBWATCH_EMAIL_DRY_RUN=false` to actually send; see the
+  SMTP guidance in [docs/Operations.md](docs/Operations.md). Verify delivery with
+  `webwatch notify --test --send`.
+- **`facts.yaml`** — the canonical address, hours, and event rules that pages are checked against.
+  This is the source of truth: change it here first when the museum's real details change. See
+  [docs/Facts.md](docs/Facts.md). Validate it with `webwatch facts --validate`.
 
 ## Common commands
 
@@ -74,13 +84,27 @@ treat "data wrong" differently from "our checker broke."
 
 ## Running from cron
 
-Use `webwatch notify` (it tracks state and emails on transitions); `check` is the side-effect-free
-interactive command. See [docs/Operations.md](docs/Operations.md).
+Two separate commands on two separate schedules (`check` is the side-effect-free interactive
+command and isn't used here). See [docs/Operations.md](docs/Operations.md) for the full contract.
 
 ```cron
-# Check every morning at 7am; email fires only on state transitions.
+# Daily at 7am — run the checks, update state, and email ONLY when something changes
+# (a check newly fails or recovers).
 0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
+
+# Monday at 8am — email a standing summary of everything still open, so a long-running
+# problem doesn't go silent after its one `notify` alert. Reads saved state; no re-scrape.
+0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
 ```
+
+`notify` and `digest` are independent: **`notify` never sends the weekly summary**, and the digest
+runs **only when its own cron line fires** (the `0 8 * * 1` above = Mondays at 08:00; change it to
+whatever cadence you want). If you install only the `notify` line, you'll get on-change alerts but no
+periodic digest. The digest reflects the state from the most recent `notify` run.
+
+Both need: the working directory to hold `facts.yaml` and a writable `state.json`, and the
+environment (`.env` or the crontab) to provide SMTP settings with `WEBWATCH_EMAIL_DRY_RUN=false`.
+Verify delivery first with `webwatch notify --test --send`.
 
 ## Documentation
 

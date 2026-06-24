@@ -34,6 +34,7 @@ help:
 .PHONY: bootstrap
 bootstrap: install
 	$(UV) pre-commit install
+	$(UV) pre-commit install --hook-type pre-push
 	@test -f .env || cp .env.example .env
 	@echo "Bootstrap complete. Edit .env to configure SMTP and runtime options."
 
