@@ -71,14 +71,15 @@ the alert/recovery memory (the next run re-evaluates from scratch).
 ## Cron
 
 Run `notify` on a schedule. Provide the environment (via `.env` or the crontab) and ensure the
-working directory holds `facts.yaml` and the writable `state.json`:
+working directory holds `facts.yaml` and the writable `state.json`. **Pass `--send`** — it overrides
+the dry-run default so the jobs actually deliver; without it they only print the email to the log:
 
 ```cron
 # Daily at 7am: run checks, update state, email on any change.
-0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
+0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify --send >> /var/log/webwatch.log 2>&1
 
 # Monday at 8am: email a standing summary of anything still open (no re-scrape).
-0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
+0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest --send >> /var/log/webwatch.log 2>&1
 ```
 
 `notify` gives immediate on-change alerts; `digest` reminds you of unresolved problems on a slower
