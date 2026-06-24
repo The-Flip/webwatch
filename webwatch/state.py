@@ -38,6 +38,9 @@ class CheckState:
     unhealthy_streak: int = 0
     healthy_streak: int = 0
     alerting: bool = False
+    #: whether the current alert has been successfully handed off to notification.
+    #: An alert that failed to send stays ``False`` so the next run retries it.
+    notified: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +95,7 @@ def apply_results(
         key = _key(result.site, result.name)
         prior = previous.get(key)
         was_alerting = prior.alerting if prior else False
+        notified = prior.notified if prior else False
         healthy = result.status in _HEALTHY
 
         if healthy:
@@ -102,18 +106,41 @@ def apply_results(
             healthy_streak = 0
 
         alerting = was_alerting
+        recovered = False
         if not was_alerting and unhealthy_streak >= threshold:
             alerting = True
-            transitions.append(Transition(result.site, result.name, "alert", result.status))
+            notified = False  # a fresh alert, not yet handed to notification
         elif was_alerting and healthy_streak >= recover:
             alerting = False
+            notified = False
+            recovered = True
+
+        # Recovery is one-shot; an alert re-fires every run until it is notified,
+        # so a send that failed last run is retried (no silently-dropped alarm).
+        if recovered:
             transitions.append(Transition(result.site, result.name, "recover", result.status))
+        elif alerting and not notified:
+            transitions.append(Transition(result.site, result.name, "alert", result.status))
 
         new_state[key] = CheckState(
             status=result.status.value,
             unhealthy_streak=unhealthy_streak,
             healthy_streak=healthy_streak,
             alerting=alerting,
+            notified=notified,
         )
 
     return new_state, transitions
+
+
+def mark_notified(state: State, transitions: list[Transition]) -> None:
+    """Mark each alerted check as notified — call only after a send did not fail.
+
+    Persisting ``notified=True`` is what stops an alert from re-firing every run;
+    if the send raised, skip this so the next run retries.
+    """
+    for transition in transitions:
+        if transition.kind == "alert":
+            check_state = state.get(_key(transition.site, transition.name))
+            if check_state is not None:
+                check_state.notified = True

@@ -21,7 +21,7 @@ from webwatch.report import render_json, render_text
 from webwatch.result import exit_code
 from webwatch.run import register_builtins, run_checks
 from webwatch.sources import registry as sources_registry
-from webwatch.state import apply_results, load_state, save_state
+from webwatch.state import apply_results, load_state, mark_notified, save_state
 
 
 @click.group()
@@ -123,7 +123,6 @@ def notify(dry_run: bool | None) -> None:
 
     previous = load_state()
     new_state, transitions = apply_results(previous, results)
-    save_state(new_state)
 
     content = render_email(transitions, results)
     if content is None:
@@ -131,11 +130,17 @@ def notify(dry_run: bool | None) -> None:
     else:
         resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
         try:
-            if send_from_config(content, dry_run=resolved_dry_run, printer=click.echo):
+            delivered = send_from_config(content, dry_run=resolved_dry_run, printer=click.echo)
+            if delivered:
                 click.echo("Notification email sent.")
-        except smtplib.SMTPException as err:
+            # The notification was handled (sent or printed) without error; record
+            # it so it doesn't re-fire. A raised error skips this -> retry next run.
+            mark_notified(new_state, transitions)
+        except (smtplib.SMTPException, OSError) as err:
             click.echo(f"Warning: failed to send notification email: {err}", err=True)
 
+    # Save after the send attempt so `notified` reflects whether it succeeded.
+    save_state(new_state)
     raise SystemExit(exit_code(results))
 
 

@@ -84,6 +84,9 @@ def send(
     configured = bool(host and sender and to)
     if dry_run or not configured:
         reason = "dry-run" if dry_run else "SMTP not configured"
+        if dry_run and configured:
+            # Easy to overlook in cron: SMTP is set up but delivery is off.
+            printer("[webwatch] WARNING: SMTP is configured but dry-run is on — no email is sent.")
         printer(
             f"[webwatch] email not sent ({reason}):\nSubject: {content.subject}\n\n{content.body}"
         )

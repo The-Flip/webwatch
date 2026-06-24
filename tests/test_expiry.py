@@ -51,6 +51,24 @@ def test_no_weekday_falls_back_to_nearest() -> None:
     assert end_date(_event(weekday=""), now=_now(2026, 6, 20)) == dt.date(2026, 6, 27)
 
 
+def test_far_future_no_weekday_event_is_not_read_as_last_year() -> None:
+    """A valid far-future date must not be flagged expired by a symmetric window (agy review)."""
+    event = _event(month="Dec", day="26", weekday="")
+    assert end_date(event, now=_now(2026, 6, 24)) == dt.date(2026, 12, 26)
+    result = check_expired_events(_events(event), now=_now(2026, 6, 24), site=SITE)
+    assert result.status is CheckStatus.OK
+
+
+def test_weekday_typo_is_indeterminate_not_expired() -> None:
+    """A stated weekday that only matches a long-past year (a typo) -> indeterminate, not expired."""
+    # Jun 27 2026 is a Saturday; the card says Friday (an editorial typo).
+    event = _event(month="Jun", day="27", weekday="Friday")
+    assert end_date(event, now=_now(2026, 6, 24)) is None
+    result = check_expired_events(_events(event), now=_now(2026, 6, 24), site=SITE)
+    assert result.status is CheckStatus.OK
+    assert "indeterminate" in result.observed
+
+
 # --- the check ----------------------------------------------------------------
 
 

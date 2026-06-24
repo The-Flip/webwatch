@@ -27,32 +27,47 @@ def _month_number(text: str) -> int | None:
     return _MONTHS.get(text.strip().lower()[:3])
 
 
+# These are "Upcoming Events", so the real date sits in a future-biased window
+# around now. A symmetric nearest-year choice would mis-read a valid far-future
+# date (e.g. Dec 26) as last year's and flag it expired (agy review).
+_BACK_WINDOW_DAYS = 60
+_FORWARD_WINDOW_DAYS = 305
+
+
 def end_date(event: Event, *, now: dt.datetime) -> dt.date | None:
     """Infer an event's end date, or ``None`` if it can't be pinned confidently.
 
-    Tries the years around ``now``; when the card shows a weekday, keeps only the
-    candidate years whose date falls on that weekday; returns the survivor closest
-    to ``now``.
+    Builds the candidate dates for the years around ``now``, restricts them to a
+    future-biased window, and (when the card shows a weekday) keeps only those whose
+    weekday matches. Returns the in-window survivor nearest ``now``. Returns ``None``
+    — *indeterminate, never guessed-expired* — when nothing plausible survives,
+    which also covers an editorial weekday typo (a stated weekday that only matches a
+    long-past year while the bare date is upcoming).
     """
     month = _month_number(event.month)
     if month is None or not event.day.isdigit():
         return None
     day = int(event.day)
+    today = now.date()
+    low = today - dt.timedelta(days=_BACK_WINDOW_DAYS)
+    high = today + dt.timedelta(days=_FORWARD_WINDOW_DAYS)
 
-    wanted_weekday = normalize.text(event.weekday) if event.weekday else ""
-    candidates: list[dt.date] = []
+    in_window: list[dt.date] = []
     for year in (now.year - 1, now.year, now.year + 1):
         try:
             candidate = dt.date(year, month, day)
         except ValueError:
             continue  # e.g. Feb 29 in a non-leap year
-        if wanted_weekday and _WEEKDAYS[candidate.weekday()] != wanted_weekday:
-            continue
-        candidates.append(candidate)
+        if low <= candidate <= high:
+            in_window.append(candidate)
 
-    if not candidates:
+    if event.weekday:
+        wanted = normalize.text(event.weekday)
+        in_window = [c for c in in_window if _WEEKDAYS[c.weekday()] == wanted]
+
+    if not in_window:
         return None
-    return min(candidates, key=lambda d: abs((d - now.date()).days))
+    return min(in_window, key=lambda d: abs((d - today).days))
 
 
 def check_expired_events(

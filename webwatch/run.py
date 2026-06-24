@@ -91,11 +91,28 @@ def run_checks(
             results.extend(fetch_error_results(source.name, names, str(err)))
             continue
 
-        results.extend(check.run(observation, facts) for check in checks)
-        results.extend(
-            rules.evaluate(rule, observation.events, site=source.name) for rule in event_rules
-        )
+        # Each check/rule is run defensively: a drastic page change can make
+        # extraction raise (e.g. AttributeError), and catching it per item keeps one
+        # broken check from killing the whole run (agy Phase E review).
+        for check in checks:
+            try:
+                results.append(check.run(observation, facts))
+            except Exception as err:
+                results.append(_crashed(source.name, check.field, err))
+        for rule in event_rules:
+            try:
+                results.append(rules.evaluate(rule, observation.events, site=source.name))
+            except Exception as err:
+                results.append(_crashed(source.name, rule.id, err))
         if run_expiry:
-            results.append(check_expired_events(observation.events, now=now, site=source.name))
+            try:
+                results.append(check_expired_events(observation.events, now=now, site=source.name))
+            except Exception as err:
+                results.append(_crashed(source.name, _EXPIRED_EVENTS, err))
 
     return results
+
+
+def _crashed(site: str, name: str, err: Exception) -> CheckResult:
+    """An unexpected crash in a check becomes a STRUCTURE_CHANGED result, not a traceback."""
+    return CheckResult.structure_changed(site, name, detail=f"unexpected error: {err!r}")

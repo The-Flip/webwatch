@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from webwatch.result import CheckResult
-from webwatch.state import apply_results, load_state, save_state
+from webwatch.state import apply_results, load_state, mark_notified, save_state
 
 
 def _mismatch() -> CheckResult:
@@ -67,3 +67,20 @@ def test_save_and_load_roundtrip(tmp_path) -> None:
 
 def test_load_missing_file_is_empty(tmp_path) -> None:
     assert load_state(tmp_path / "nope.json") == {}
+
+
+def test_alert_does_not_refire_once_notified() -> None:
+    state, first = apply_results({}, [_mismatch()], alert_after=1, recover_after=1)
+    assert [t.kind for t in first] == ["alert"]
+    mark_notified(state, first)  # the send succeeded
+    state, second = apply_results(state, [_mismatch()], alert_after=1, recover_after=1)
+    assert second == []  # already notified -> quiet
+
+
+def test_alert_refires_until_notified() -> None:
+    """If the send failed (notified not set), the alert retries next run (no dropped alarm)."""
+    state, first = apply_results({}, [_mismatch()], alert_after=1, recover_after=1)
+    assert [t.kind for t in first] == ["alert"]
+    # do NOT mark_notified -> simulate a failed send
+    state, second = apply_results(state, [_mismatch()], alert_after=1, recover_after=1)
+    assert [t.kind for t in second] == ["alert"]

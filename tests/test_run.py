@@ -89,3 +89,19 @@ def test_fact_filter_targets_expired_events() -> None:
     results = run_checks(FACTS, fact="expired_events", transport=_router(), now=NOW)
     assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit"}
     assert all(r.name == "expired_events" and r.status is CheckStatus.OK for r in results)
+
+
+def test_one_crashing_check_does_not_kill_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unexpected crash in one check becomes STRUCTURE_CHANGED; the rest still run."""
+    import webwatch.run as run_module
+
+    def boom(*_a: object, **_k: object) -> object:
+        raise AttributeError("the page changed drastically")
+
+    monkeypatch.setattr(run_module, "check_expired_events", boom)
+    results = run_checks(FACTS, transport=_router(), now=NOW)
+
+    expired = [r for r in results if r.name == "expired_events"]
+    assert expired and all(r.status is CheckStatus.STRUCTURE_CHANGED for r in expired)
+    # Other checks still ran (the crash didn't abort the whole run).
+    assert any(r.name == "email" and r.status is CheckStatus.OK for r in results)

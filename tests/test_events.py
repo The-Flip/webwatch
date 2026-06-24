@@ -35,13 +35,23 @@ def test_missing_section_returns_none() -> None:
     assert extract_events("<html><body><p>No events.</p></body></html>") is None
 
 
-def test_empty_section_returns_empty_list() -> None:
-    """Heading present but no cards -> [] (empty schedule), not None (agy review)."""
+def test_empty_section_with_message_returns_empty_list() -> None:
+    """Heading + an explicit 'no events' message -> [] (empty schedule), not None (agy review)."""
     html = (
         "<html><body><section><div><h2>Upcoming Events</h2></div>"
         "<p>No upcoming events.</p></section></body></html>"
     )
     assert extract_events(html) == []
+
+
+def test_no_cards_and_no_empty_message_fails_safe_to_none() -> None:
+    """Heading present but neither cards nor an empty-state message -> None (likely broken markup)."""
+    html = (
+        "<html><body><section><div><h2>Upcoming Events</h2></div>"
+        "<div><article>Restructured content with no parseable cards</article></div>"
+        "</section></body></html>"
+    )
+    assert extract_events(html) is None
 
 
 def test_location_is_not_mistaken_for_time() -> None:

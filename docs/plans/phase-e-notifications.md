@@ -65,10 +65,23 @@ a live recipient during testing.
 - Seeding a `state.json` that marks the repair-day rule as previously OK, then running against a
   fixture where it fails, prints an alert email (dry-run).
 
-## Review status (agy unavailable — self-review applied)
+## Review feedback incorporated
 
-`agy` is returning HTTP 429 ("model API overloaded") right now, so an independent review is **owed**
-for this plan (and the Phase D plan and the event-time-range fix) once the service recovers:
-`make review-plan PLAN=docs/plans/phase-e-notifications.md`. Self-review folded in: the safe-by-default
-send (dry-run + unconfigured-SMTP both print, never reach the network), the save-then-send ordering
-limitation, and keeping `check` side-effect-free while `notify` owns state/email.
+Implemented with a self-review first (agy was down with HTTP 429): safe-by-default send (dry-run and
+unconfigured-SMTP both print, never reach the network) and keeping `check` side-effect-free.
+
+A later **`agy` review** raised four issues, all now fixed:
+
+- **Missed-alarm from save-before-send (High):** state was saved as `alerting` before the send, so a
+  failed send dropped the alert forever. `CheckState` now carries a `notified` flag; an alert
+  re-fires every run until it is successfully handed off, and `cli notify` saves state _after_ the
+  send, marking `notified` only when the send didn't raise (`state.mark_notified`). A failed send
+  retries next run.
+- **Incomplete exception handling (Medium):** `notify` now catches `OSError` (DNS / connection /
+  timeout) in addition to `smtplib.SMTPException`, so a network blip doesn't crash with a traceback
+  and a misleading exit code.
+- **One crash blocking all alerts (Medium):** `run_checks` now runs each check/rule/expiry
+  defensively — an unexpected extraction crash becomes a `STRUCTURE_CHANGED` result instead of
+  aborting the whole run.
+- **Silent dry-run despite configured SMTP (Low):** `send` prints a visible WARNING when SMTP is
+  configured but dry-run is on, so a forgotten `WEBWATCH_EMAIL_DRY_RUN=false` is noticeable in cron.

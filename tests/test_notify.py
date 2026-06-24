@@ -87,6 +87,24 @@ def test_send_dry_run_prints_and_does_not_deliver(monkeypatch: pytest.MonkeyPatc
     assert printed and "dry-run" in printed[0]
 
 
+def test_dry_run_with_configured_smtp_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SMTP configured but dry-run on is easy to miss in cron — warn visibly (agy review)."""
+    monkeypatch.setattr(mail.smtplib, "SMTP", _never_smtp)
+    printed: list[str] = []
+    send(
+        EmailContent("s", "b"),
+        dry_run=True,
+        host="smtp.test",
+        port=587,
+        username="u",
+        password="p",
+        sender="from@x",
+        recipients="to@x",
+        printer=printed.append,
+    )
+    assert any("WARNING" in line and "dry-run" in line for line in printed)
+
+
 def test_send_unconfigured_prints_and_does_not_deliver(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mail.smtplib, "SMTP", _never_smtp)
     printed: list[str] = []

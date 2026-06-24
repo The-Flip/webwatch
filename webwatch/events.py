@@ -108,24 +108,38 @@ def _parse_card(card: Tag) -> Event:
     )
 
 
+_EMPTY_MARKERS = ("no upcoming events", "no events", "nothing scheduled", "check back")
+
+
 def extract_events(html: str) -> list[Event] | None:
     """Events in the Upcoming Events section.
 
-    ``None`` when the section is absent (no heading) — a structural problem. An
-    empty list when the heading is present but lists nothing (an empty schedule),
-    so the rules engine reports a missing recurring event as a MISMATCH rather than
-    a false STRUCTURE_CHANGED (agy Phase D review).
+    Returns the parsed events, or distinguishes three no-card cases:
+
+    - **no heading** -> ``None`` (the section is gone — a structural problem);
+    - **heading + an explicit empty-state message** ("No upcoming events") -> ``[]``
+      (genuinely empty, so the rules engine reports a missing event as a MISMATCH);
+    - **heading but neither cards nor an empty-state message** -> ``None``, failing
+      safe to STRUCTURE_CHANGED, since the card markup has most likely changed
+      (agy reviews — don't let a parser break read as an empty schedule).
     """
     soup = BeautifulSoup(html, "lxml")
     heading = _find_events_heading(soup)
     if heading is None:
         return None
+
+    broadest: Tag | None = None
     ancestor: Tag | None = heading
     for _ in range(6):
         ancestor = ancestor.parent if ancestor else None
         if ancestor is None:
             break
+        broadest = ancestor
         cards = _event_cards(ancestor)
         if cards:
             return [_parse_card(card) for card in cards]
-    return []  # heading present, no cards -> empty schedule
+
+    section_text = normalize.text(broadest.get_text(" ", strip=True)) if broadest else ""
+    if any(marker in section_text for marker in _EMPTY_MARKERS):
+        return []  # heading present with an explicit "no events" message
+    return None  # heading present but no cards and no empty-state -> likely broken markup

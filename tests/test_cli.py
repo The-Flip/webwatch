@@ -7,6 +7,8 @@ transport live in test_run.py.
 
 from __future__ import annotations
 
+import smtplib
+
 import pytest
 from click.testing import CliRunner
 
@@ -120,3 +122,27 @@ def test_notify_no_transitions_when_all_ok(monkeypatch: pytest.MonkeyPatch, tmp_
     result = CliRunner().invoke(cli, ["notify"])
     assert result.exit_code == EXIT_OK
     assert "No notifications to send" in result.output
+
+
+@pytest.mark.parametrize("error", [smtplib.SMTPException("smtp down"), OSError("dns fail")])
+def test_notify_retries_when_send_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, error: Exception
+) -> None:
+    """A failed send is caught (no crash) and re-fires next run — no dropped alarm."""
+    mismatch = CheckResult.mismatch("s", "hours", expected="9-5", observed="10-6")
+    monkeypatch.setattr(cli_module, "run_checks", lambda *a, **k: [mismatch])
+    monkeypatch.setattr("webwatch.config.STATE_PATH", str(tmp_path / "state.json"))
+    monkeypatch.setattr("webwatch.config.ALERT_AFTER_FAILURES", 1)
+
+    def boom(*_a: object, **_k: object) -> bool:
+        raise error
+
+    monkeypatch.setattr(cli_module, "send_from_config", boom)
+
+    first = CliRunner().invoke(cli, ["notify", "--send"])
+    assert first.exit_code == EXIT_DATA_PROBLEM
+    assert "failed to send" in first.output  # caught, not a traceback
+
+    # The alert wasn't recorded as notified, so it re-fires (and re-fails) next run.
+    second = CliRunner().invoke(cli, ["notify", "--send"])
+    assert "failed to send" in second.output

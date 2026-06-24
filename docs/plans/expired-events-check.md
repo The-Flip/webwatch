@@ -85,17 +85,32 @@ present, that case is still caught.
 - `webwatch check` against the live pages (real `now`) includes an `expired_events` result per page.
 - A pinned-`now` demo shows OK before an event's date and MISMATCH after it.
 
-## Review status (agy still 429 — self-review applied)
+## Review feedback incorporated
 
-`agy` is still returning HTTP 429 (model overloaded), so an independent review remains **owed**
-(`make review-plan PLAN=docs/plans/expired-events-check.md`). Self-review folded in:
+Self-review folded in first: timezone-correct comparison (museum-local midnight, with a `tzdata`
+dependency), the strict-after boundary (ending today ≠ expired), and never false-flagging an
+indeterminate date.
 
-- **Timezone-correct comparison:** compare `now.date()` (in `WEBWATCH_TIMEZONE`) to the naive
-  inferred date, so "midnight" is the museum's local midnight, not the server's. Add a `tzdata`
-  dependency so `ZoneInfo("America/Chicago")` resolves on any platform.
-- **Boundary:** expired iff `now.date()` is _strictly after_ the end date (ending today ≠ expired).
-- **Indeterminate dates never false-flag:** an event whose year can't be pinned (unparseable month,
-  or weekday inconsistent with every nearby year) is skipped and surfaced in the detail; if nothing
-  is confidently expired the check is `OK` (with the indeterminate count noted), not a guess.
-- **No-weekday limitation** is explicit: a yearless, weekday-less date >~6 months stale can read as
-  future; the realistic stale-by-days case (and any case with a weekday) is still caught.
+A later **`agy` review** caught two more false-positive risks in the year inference, both now fixed:
+
+- **Symmetric window (High):** picking the nearest year by absolute distance flagged a valid
+  far-future date (e.g. `Dec 26` with no weekday) as last year's → false expiry. Year inference now
+  restricts candidates to a **future-biased window** (`now − 60d … now + 305d`) before choosing,
+  since these are _upcoming_ events.
+- **Weekday typo (High):** a stated weekday matching only a long-past year (an editorial typo like
+  "Friday Jun 27" when Jun 27 is a Saturday) flagged the event expired. The weekday filter now runs
+  _within_ the future window, so such a case yields **indeterminate** (not expired) — we don't cry
+  wolf over a typo.
+- **Empty vs broken markup (Medium):** a present heading with no parseable cards no longer always
+  returns `[]` (which would make the rules engine cry "event not found"). `extract_events` returns
+  `[]` only when an explicit empty-state message ("No upcoming events") is present, and otherwise
+  `None` (→ `STRUCTURE_CHANGED`), failing safe when the card markup likely changed.
+
+Deliberately **not** changed:
+
+- **Multi-day date badges (Minor):** a badge like `"Jun 26 - Jun 28"` doesn't parse to a single day
+  and becomes indeterminate (safe — no false alarm — but a stale multi-day event wouldn't be flagged).
+  The museum's events are single-day; range-badge parsing is recorded as a future improvement.
+
+A back-window of 60 days bounds how stale an event can be and still be caught; beyond that it reads
+as indeterminate. That is an accepted trade-off for not false-flagging far-future dates.
