@@ -56,5 +56,8 @@ SMTP_HOST: str = config("SMTP_HOST", default="")
 SMTP_PORT: int = config("SMTP_PORT", default=587, cast=int)
 SMTP_USERNAME: str = config("SMTP_USERNAME", default="")
 SMTP_PASSWORD: str = config("SMTP_PASSWORD", default="")
+
+#: Connection/operation timeout (seconds) for SMTP, so a dead port can't hang cron.
+SMTP_TIMEOUT: float = config("WEBWATCH_SMTP_TIMEOUT", default=30, cast=float)
 EMAIL_FROM: str = config("WEBWATCH_EMAIL_FROM", default="")
 EMAIL_TO: str = config("WEBWATCH_EMAIL_TO", default="")

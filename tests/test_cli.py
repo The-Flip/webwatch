@@ -124,6 +124,31 @@ def test_notify_no_transitions_when_all_ok(monkeypatch: pytest.MonkeyPatch, tmp_
     assert "No notifications to send" in result.output
 
 
+def test_notify_test_dry_run_prints_without_sending(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("webwatch.config.EMAIL_DRY_RUN", True)
+    monkeypatch.setattr("webwatch.notify.email.smtplib.SMTP", _explode)
+    result = CliRunner().invoke(cli, ["notify", "--test"])
+    assert result.exit_code == 0
+    assert "test email" in result.output
+
+
+def test_notify_test_send_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli_module, "send_from_config", lambda *a, **k: True)
+    result = CliRunner().invoke(cli, ["notify", "--test", "--send"])
+    assert result.exit_code == 0
+    assert "Test email sent" in result.output
+
+
+def test_notify_test_send_failure_is_clean_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_a: object, **_k: object) -> bool:
+        raise smtplib.SMTPException("bad creds")
+
+    monkeypatch.setattr(cli_module, "send_from_config", boom)
+    result = CliRunner().invoke(cli, ["notify", "--test", "--send"])
+    assert result.exit_code != 0
+    assert "failed to send test email" in result.output
+
+
 @pytest.mark.parametrize("error", [smtplib.SMTPException("smtp down"), OSError("dns fail")])
 def test_notify_retries_when_send_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path, error: Exception

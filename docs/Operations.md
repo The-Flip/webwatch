@@ -43,10 +43,20 @@ WEBWATCH_EMAIL_TO=ops@theflip.museum,curator@theflip.museum
 WEBWATCH_EMAIL_DRY_RUN=false
 ```
 
-> Known limitation: state is saved each run (so streak counters advance). If a real send fails, the
-> error is logged and the run still exits with its result code, but that alert won't automatically
-> re-fire (the check is already marked alerting). A periodic digest of still-open problems would
-> mitigate this and is left for later.
+Use port **587** (STARTTLS) — port 25 is blocked on most hosts. For Gmail app passwords use
+`SMTP_HOST=smtp.gmail.com`; leave `SMTP_USERNAME`/`SMTP_PASSWORD` blank to relay without auth (an
+IP-allowlisted Workspace relay). `WEBWATCH_SMTP_TIMEOUT` (default 30s) bounds the connection so a
+dead port can't hang a cron run.
+
+**Verify delivery** without waiting for a real problem:
+
+```bash
+webwatch notify --test          # prints the test email (dry-run)
+webwatch notify --test --send   # actually sends it (needs SMTP configured)
+```
+
+A failed send is reported: `notify` warns and retries on the next run (the alert is only marked
+notified once a send succeeds, so a transient SMTP outage never silently drops an alarm).
 
 ## State
 

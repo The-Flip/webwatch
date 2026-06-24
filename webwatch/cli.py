@@ -16,7 +16,7 @@ from webwatch import __version__, config
 from webwatch import facts as facts_module
 from webwatch.checks import registry as checks_registry
 from webwatch.facts import FactsError
-from webwatch.notify.email import render_email, send_from_config
+from webwatch.notify.email import EmailContent, render_email, send_from_config
 from webwatch.report import render_json, render_text
 from webwatch.result import exit_code
 from webwatch.run import register_builtins, run_checks
@@ -107,12 +107,35 @@ def facts(validate: bool) -> None:
     default=None,
     help="Print the email instead of sending it (default: WEBWATCH_EMAIL_DRY_RUN).",
 )
-def notify(dry_run: bool | None) -> None:
+@click.option(
+    "--test",
+    "send_test",
+    is_flag=True,
+    help="Send a fixed test email to verify SMTP, then exit (runs no checks).",
+)
+def notify(dry_run: bool | None, send_test: bool) -> None:
     """Run checks, update state, and email on state transitions (the cron entry point).
 
     Email fires only when a check newly fails or recovers, after the configured
     consecutive-failure threshold. Exit code matches ``check``.
+
+    ``--test`` instead sends a one-off test message (use ``--test --send`` to
+    actually deliver it) so you can verify SMTP without waiting for a real problem.
     """
+    resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
+
+    if send_test:
+        test_content = EmailContent(
+            "[webwatch] test email",
+            "If you received this, webwatch email notifications are working.",
+        )
+        try:
+            if send_from_config(test_content, dry_run=resolved_dry_run, printer=click.echo):
+                click.echo("Test email sent.")
+        except (smtplib.SMTPException, OSError) as err:
+            raise click.ClickException(f"failed to send test email: {err}") from err
+        return
+
     try:
         facts = facts_module.load_facts()
     except FactsError as err:
@@ -128,7 +151,6 @@ def notify(dry_run: bool | None) -> None:
     if content is None:
         click.echo("No notifications to send (no state transitions).")
     else:
-        resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
         try:
             delivered = send_from_config(content, dry_run=resolved_dry_run, printer=click.echo)
             if delivered:

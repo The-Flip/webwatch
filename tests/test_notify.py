@@ -46,8 +46,8 @@ def test_render_email_recovery_only() -> None:
 class _FakeSMTP:
     instances: ClassVar[list[_FakeSMTP]] = []
 
-    def __init__(self, host: str, port: int) -> None:
-        self.host, self.port = host, port
+    def __init__(self, host: str, port: int, timeout: float | None = None) -> None:
+        self.host, self.port, self.timeout = host, port, timeout
         self.started = False
         self.logged: tuple[str, str] | None = None
         self.sent: list[object] = []
@@ -135,10 +135,12 @@ def test_send_delivers_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
         password="p",
         sender="from@x",
         recipients="a@x, b@x",
+        timeout=12.0,
     )
     assert sent is True
     smtp = _FakeSMTP.instances[-1]
     assert smtp.started and smtp.logged == ("u", "p")
+    assert smtp.timeout == 12.0  # a timeout is always passed so a dead port can't hang
     message = smtp.sent[0]
     assert message["Subject"] == "subj"  # type: ignore[index]
     assert message["From"] == "from@x"  # type: ignore[index]

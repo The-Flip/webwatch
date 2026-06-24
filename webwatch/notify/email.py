@@ -73,6 +73,7 @@ def send(
     password: str,
     sender: str,
     recipients: str | Iterable[str],
+    timeout: float = 30.0,
     printer: Callable[[str], None] = print,
 ) -> bool:
     """Send the email, or print it. Returns ``True`` only if actually delivered.
@@ -98,7 +99,7 @@ def send(
     message["To"] = ", ".join(to)
     message.set_content(content.body)
 
-    with smtplib.SMTP(host, port) as server:
+    with smtplib.SMTP(host, port, timeout=timeout) as server:
         server.starttls()
         if username and password:
             server.login(username, password)
@@ -119,5 +120,6 @@ def send_from_config(
         password=config.SMTP_PASSWORD,
         sender=config.EMAIL_FROM,
         recipients=config.EMAIL_TO,
+        timeout=config.SMTP_TIMEOUT,
         printer=printer,
     )
