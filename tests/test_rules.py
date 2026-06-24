@@ -73,6 +73,22 @@ def test_expected_event_absent_is_mismatch() -> None:
     assert "not found" in result.summary
 
 
+def test_whole_word_matching_avoids_substring_collisions() -> None:
+    """A keyword must match a whole word: 'art' must not match 'Party' (agy review)."""
+    party = Event(title="Saturday Party", weekday="Saturday", time="10:00 AM - 5:00 PM")
+    result = evaluate(_rule(match="art"), _events(party), site=SITE)
+    assert result.status is CheckStatus.MISMATCH
+    assert "not found" in result.summary
+
+
+def test_passes_if_any_matching_event_satisfies() -> None:
+    """A wrong earlier match must not fail the rule if a correct one is also listed (agy review)."""
+    wrong = Event(title="Repair Prep", weekday="Friday", time="9:00 AM")
+    right = _repair()  # Saturday Repair Day, Saturday, 10:00 AM, recurring
+    result = evaluate(_rule(), _events(wrong, right), site=SITE)
+    assert result.status is CheckStatus.OK
+
+
 def test_unreadable_events_is_structure_changed() -> None:
     result = evaluate(_rule(), Observed.missing("no events section"), site=SITE)
     assert result.status is CheckStatus.STRUCTURE_CHANGED

@@ -11,19 +11,26 @@ text is ``STRUCTURE_CHANGED`` for that aspect — never a silent pass. See
 
 from __future__ import annotations
 
+import re
+
 from webwatch import normalize
 from webwatch.events import Event
 from webwatch.facts import Rule
-from webwatch.result import CheckResult
+from webwatch.result import CheckResult, CheckStatus
 from webwatch.sources.base import Observed
 
 
 def _match_events(events: list[Event], keyword: str) -> list[Event]:
-    """Events matching ``keyword`` — by title first, description only as fallback."""
-    by_title = [e for e in events if keyword in e.title.lower()]
+    """Events matching ``keyword`` as a whole word — by title first, then description.
+
+    Whole-word matching (not bare substring) avoids collisions like ``"art"`` in
+    ``"Party"`` (agy Phase D review).
+    """
+    pattern = re.compile(rf"\b{re.escape(keyword)}\b")
+    by_title = [e for e in events if pattern.search(e.title.lower())]
     if by_title:
         return by_title
-    return [e for e in events if keyword in e.description.lower()]
+    return [e for e in events if pattern.search(e.description.lower())]
 
 
 def _event_window(text: str) -> tuple[int, int | None]:
@@ -68,10 +75,25 @@ def evaluate(rule: Rule, observed_events: Observed[list[Event]], *, site: str) -
             summary=f"expected recurring event ({keyword!r}) not found",
         )
 
-    # Prefer an event explicitly tagged "Recurring".
-    event = next((e for e in matches if e.recurring), matches[0])
+    # Evaluate every matching event; the rule is satisfied if ANY of them passes
+    # (a wrong "Repair Prep" earlier in the list shouldn't fail a correct "Repair
+    # Day" later, agy Phase D review). Otherwise surface the most informative
+    # failure — prefer a confirmed MISMATCH over a couldn't-read condition.
+    results = [_evaluate_event(rule, event, site=site, name=name) for event in matches]
+    for result in results:
+        if result.status is CheckStatus.OK:
+            return result
+    for result in results:
+        if result.status is CheckStatus.MISMATCH:
+            return result
+    return results[0]
+
+
+def _evaluate_event(rule: Rule, event: Event, *, site: str, name: str) -> CheckResult:
+    """Check one matched event against the rule's weekday and time window."""
     expected_weekday = str(rule.params.get("weekday", "")).strip()
     expected_start = str(rule.params.get("start", "")).strip()
+    expected_end = str(rule.params.get("end", "")).strip()
     problems: list[str] = []
 
     if expected_weekday:
@@ -82,7 +104,6 @@ def evaluate(rule: Rule, observed_events: Observed[list[Event]], *, site: str) -
         if normalize.text(event.weekday) != normalize.text(expected_weekday):
             problems.append(f"weekday {event.weekday} (expected {expected_weekday})")
 
-    expected_end = str(rule.params.get("end", "")).strip()
     if expected_start:
         if not event.time:
             return CheckResult.structure_changed(
@@ -98,7 +119,6 @@ def evaluate(rule: Rule, observed_events: Observed[list[Event]], *, site: str) -
             )
         if event_start != expected_start_min:
             problems.append(f"start {_hhmm(event_start)} (expected {expected_start})")
-        # Compare the end only when both the rule and the event provide one.
         if expected_end_min is not None and event_end is not None and event_end != expected_end_min:
             problems.append(f"end {_hhmm(event_end)} (expected {expected_end})")
 

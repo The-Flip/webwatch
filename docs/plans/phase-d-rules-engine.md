@@ -123,17 +123,32 @@ The stated weekday matches the date; the **time is unreliable** (all three event
   fall on the right date", a clock comes in then.
 - Events extraction is written reusably so the homepage (same cards) can be checked later.
 
-## Review status (agy unavailable — self-review applied)
+## Review feedback incorporated
 
-The `agy` CLI was failing at implementation time (the review process was terminated/returned empty
-— an Antigravity-side glitch, not the plan), so an independent agy pass is **still owed** and should
-be run later with `make review-plan PLAN=docs/plans/phase-d-rules-engine.md`. In the meantime an
-adversarial self-review caught and folded in:
+Implemented with a self-review first (agy was down with HTTP 429 at the time): hours-card collision
+(event cards discriminated by `<h4>`), missing sub-field → `STRUCTURE_CHANGED` not a silent pass, the
+run-impact on the all-OK tests, and the `chr(0x00B7)` middot.
 
-- **Hours-card collision:** `div.card` also matches the Hours card; event cards are discriminated by
-  an `<h4>` title and anchored near the "Upcoming Events" heading.
-- **Missing sub-field false-OK:** a matched event with an empty weekday/time reports
-  `STRUCTURE_CHANGED` for that aspect, never a silent pass; match on title first.
-- **Run impact:** wiring the rule flips the default run to a real `MISMATCH`/exit 1; the all-OK run
-  tests are updated to expect it (field checks OK, rule MISMATCH).
-- **Lint:** the middot separator is built via `chr(0x00B7)` to avoid ambiguous-unicode warnings.
+A later **`agy` review** (once the service recovered) found four more issues, all folded in:
+
+- **P1 — empty schedule vs missing section:** a present-but-empty Upcoming Events section returned
+  `None` (→ false `STRUCTURE_CHANGED`). `extract_events` now returns `None` only when the _heading_ is
+  absent and `[]` when the heading is present with no cards, so a genuinely missing recurring event is
+  a `MISMATCH`, not a false structural alarm.
+- **P2 — matching:** keyword matching is now **whole-word** (`\bkeyword\b`), avoiding collisions like
+  `"art"` in `"Party"`; and the engine evaluates **every** matching event, returning `OK` if any
+  satisfies the rule (a wrong "Repair Prep" no longer fails a correct "Repair Day" listed later).
+- **P3F2 — positional meta parsing:** the weekday and time are now identified by **content** (a part
+  that names a weekday; a part that parses as a time), so a card that omits the time doesn't put the
+  location into `event.time` and trigger a spurious `PARSE_ERROR`.
+
+Two findings were considered and deliberately **not** changed:
+
+- **P3F1 (cross-check the date badge's weekday against the stated weekday):** a real blind spot, but
+  the [expired-events check](expired-events-check.md) already computes the date and treats a
+  weekday/date inconsistency as indeterminate. Adding a second cross-check in the rule is a worthwhile
+  follow-up, not done here to avoid overlap.
+- **P4 (rule has an end but the event lists only a start → silently OK):** start-only event listings
+  are common and legitimate, so hard-flagging a missing end would be a false-positive risk that cuts
+  against the project's core value. We verify what the page shows; a missing end is not treated as a
+  discrepancy. Recorded as a deliberate divergence.

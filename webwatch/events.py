@@ -43,19 +43,27 @@ def _event_cards(scope: Tag) -> list[Tag]:
     return [card for card in scope.select("div.card") if card.find("h4")]
 
 
-def _find_events_section(soup: BeautifulSoup) -> Tag | None:
-    """The nearest ancestor of the 'Upcoming Events' heading that holds event cards."""
+_WEEKDAY_NAMES = frozenset(
+    {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+)
+
+
+def _find_events_heading(soup: BeautifulSoup) -> Tag | None:
     for heading in soup.find_all(["h1", "h2", "h3", "h4"]):
-        if normalize.text(heading.get_text()) != "upcoming events":
-            continue
-        ancestor: Tag | None = heading
-        for _ in range(5):
-            ancestor = ancestor.parent if ancestor else None
-            if ancestor is None:
-                break
-            if _event_cards(ancestor):
-                return ancestor
+        if normalize.text(heading.get_text()) == "upcoming events":
+            return heading
     return None
+
+
+def _looks_like_time(text: str) -> bool:
+    """True if ``text`` parses as a clock time or a time range."""
+    for parse in (normalize.time_range, normalize.time_to_minutes):
+        try:
+            parse(text)
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 def _badge(card: Tag) -> tuple[str, str]:
@@ -81,9 +89,11 @@ def _parse_card(card: Tag) -> Event:
         else ""
     )
 
+    # Identify the weekday and time parts by content, not position — a card may
+    # omit the time (so the location must not land in ``time``), agy Phase D review.
     parts = [part.strip() for part in meta.split(_MIDDOT) if part.strip()]
-    weekday = parts[0] if len(parts) >= 1 else ""
-    time = parts[1] if len(parts) >= 2 else ""
+    weekday = next((p for p in parts if normalize.text(p) in _WEEKDAY_NAMES), "")
+    time = next((p for p in parts if _looks_like_time(p)), "")
 
     recurring = card.find(string=lambda s: s and s.strip().lower() == "recurring") is not None
     month, day = _badge(card)
@@ -99,9 +109,23 @@ def _parse_card(card: Tag) -> Event:
 
 
 def extract_events(html: str) -> list[Event] | None:
-    """All events in the page's Upcoming Events section, or ``None`` if absent."""
+    """Events in the Upcoming Events section.
+
+    ``None`` when the section is absent (no heading) — a structural problem. An
+    empty list when the heading is present but lists nothing (an empty schedule),
+    so the rules engine reports a missing recurring event as a MISMATCH rather than
+    a false STRUCTURE_CHANGED (agy Phase D review).
+    """
     soup = BeautifulSoup(html, "lxml")
-    section = _find_events_section(soup)
-    if section is None:
+    heading = _find_events_heading(soup)
+    if heading is None:
         return None
-    return [_parse_card(card) for card in _event_cards(section)]
+    ancestor: Tag | None = heading
+    for _ in range(6):
+        ancestor = ancestor.parent if ancestor else None
+        if ancestor is None:
+            break
+        cards = _event_cards(ancestor)
+        if cards:
+            return [_parse_card(card) for card in cards]
+    return []  # heading present, no cards -> empty schedule

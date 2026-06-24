@@ -35,6 +35,30 @@ def test_missing_section_returns_none() -> None:
     assert extract_events("<html><body><p>No events.</p></body></html>") is None
 
 
+def test_empty_section_returns_empty_list() -> None:
+    """Heading present but no cards -> [] (empty schedule), not None (agy review)."""
+    html = (
+        "<html><body><section><div><h2>Upcoming Events</h2></div>"
+        "<p>No upcoming events.</p></section></body></html>"
+    )
+    assert extract_events(html) == []
+
+
+def test_location_is_not_mistaken_for_time() -> None:
+    """A card with a weekday and location but no time -> time stays empty (agy review)."""
+    meta = "Friday " + chr(0xB7) + " 108 N. State St., Suite 015"
+    html = (
+        "<html><body><section><div><h2>Upcoming Events</h2></div>"
+        '<div class="card"><div><span>Jul</span><span>4</span></div>'
+        f"<h4>Open House</h4><p>{meta}</p></div></section></body></html>"
+    )
+    events = extract_events(html)
+    assert events is not None
+    (event,) = events
+    assert event.weekday == "Friday"
+    assert event.time == ""
+
+
 def test_event_with_partial_meta_does_not_crash() -> None:
     html = (
         "<html><body><section><div><h2>Upcoming Events</h2></div>"
