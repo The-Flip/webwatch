@@ -180,6 +180,7 @@ def test_expand_abbreviations_and_to() -> None:
             "https://www.theflip.museum/?utm_source=apple&utm_medium=maps",
             "https://www.theflip.museum",
         ),
+        ("https://theflip.museum/", "https://www.theflip.museum/"),
     ],
 )
 def test_url_equivalences(a: str, b: str) -> None:
@@ -190,9 +191,10 @@ def test_url_equivalences(a: str, b: str) -> None:
     ("a", "b"),
     [
         ("http://www.theflip.museum/", "https://www.theflip.museum/"),
-        ("https://theflip.museum/", "https://www.theflip.museum/"),
         ("https://www.theflip.museum/visit", "https://www.theflip.museum/"),
         ("https://www.theflip.museum/?page=2", "https://www.theflip.museum/"),
+        ("https://wwwtheflip.museum/", "https://theflip.museum/"),
+        ("https://shop.theflip.museum/", "https://theflip.museum/"),
     ],
 )
 def test_url_differences(a: str, b: str) -> None:
@@ -202,3 +204,11 @@ def test_url_differences(a: str, b: str) -> None:
 def test_url_rejects_relative() -> None:
     with pytest.raises(ValueError):
         normalize.url("theflip.museum")
+
+
+def test_week_hours_joins_windows_and_closes_missing_days() -> None:
+    week = normalize.week_hours({"monday": ["09:00 - 12:00", "13:00 - 17:00"], "tuesday": []})
+    assert week["monday"] == "09:00 - 12:00, 13:00 - 17:00"
+    assert week["tuesday"] == "closed"
+    assert week["sunday"] == "closed"
+    assert list(week) == list(normalize.WEEKDAYS)

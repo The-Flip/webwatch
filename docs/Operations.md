@@ -10,7 +10,10 @@ How webwatch runs in production: the cron entry, notifications, state, and exit 
   emails when a check _transitions_ (newly fails or recovers). Same exit codes as `check`.
 - **`webwatch digest`** — a standing summary of every check still open, read from the saved state
   (it does _not_ re-run checks). Run on a slower cadence than `notify` so persistent problems don't
-  fall silent after their one transition email. `--only-problems` suppresses the all-clear heartbeat.
+  fall silent after their one transition email. It ends with a table of checks (rows) by site
+  (columns) showing each check's latest status, so an all-clear also shows what was checked. The
+  seven daily hours checks share one row, which shows the worst day, and `·` means there's no result
+  for that check on that site (it doesn't check it, or hasn't reported it yet). `--only-problems` suppresses the all-clear heartbeat.
   Exits 0 whenever it delivers (even with problems); non-zero only on a tool failure.
 
 ## Exit codes
@@ -51,6 +54,19 @@ Use port **587** (STARTTLS) — port 25 is blocked on most hosts. For Gmail app 
 `SMTP_HOST=smtp.gmail.com`; leave `SMTP_USERNAME`/`SMTP_PASSWORD` blank to relay without auth (an
 IP-allowlisted Workspace relay). `WEBWATCH_SMTP_TIMEOUT` (default 30s) bounds the connection so a
 dead port can't hang a cron run.
+
+## Google Places API key (google_maps source)
+
+The `google_maps` source reads Google's Places API (New) and needs `WEBWATCH_GOOGLE_PLACES_API_KEY` in
+`.env`. In Google Cloud:
+
+1. Enable billing and **Places API (New)** on the project.
+2. Create an API key.
+3. Restrict the key to that API.
+
+One run a day uses about 30 Place Details calls a month, well inside Google's free monthly usage. If
+the key is unset, every `google_maps` check reports `FETCH_ERROR` (unhealthy, so it alerts), never a
+silent skip. The key is sent only in a request header.
 
 **Verify delivery** without waiting for a real problem:
 

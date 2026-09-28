@@ -23,7 +23,8 @@ webwatch/                   # repo root (distribution & command are named "webwa
 │   │   ├── registry.py     #   registry of sources
 │   │   ├── theflip_museum.py
 │   │   ├── theflip_museum_visit.py
-│   │   └── apple_maps.py
+│   │   ├── apple_maps.py
+│   │   └── google_maps.py  #   via the Places API (key from config)
 │   ├── checks/             # Assertions over an Observation
 │   │   ├── base.py
 │   │   └── registry.py     #   Check specs, hours_checks(), PrerequisiteGate

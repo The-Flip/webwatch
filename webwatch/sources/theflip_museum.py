@@ -54,6 +54,7 @@ def _museum_node(html: str) -> dict[str, Any] | None:
 
 class TheFlipMuseum(Source):
     name = "theflip_museum"
+    label = "Website"
     url = "https://www.theflip.museum/"
     tracks = frozenset({"name", "email", *_ADDRESS_FIELDS})
     provides_events = True

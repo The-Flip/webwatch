@@ -9,6 +9,7 @@ never a false ``MISMATCH``). Comparison always goes through a normalizer.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from webwatch import normalize
@@ -20,6 +21,18 @@ from webwatch.sources.base import NotRead, Observed
 ABSENT: Any = object()
 
 Normalizer = Callable[[Any], object]
+
+
+@dataclass(frozen=True, slots=True)
+class AnyOf:
+    """An expected fact satisfied by any one of several accepted values.
+
+    For facts a site may legitimately publish in more than one form — e.g. a
+    listing that shows the museum's longer name. Each value is still compared
+    exactly (after normalization); blank values are ignored.
+    """
+
+    values: tuple[Any, ...]
 
 
 def _as_text(value: Any) -> object:
@@ -39,11 +52,17 @@ def check_field(
 
     ``normalizer`` canonicalizes both sides before comparison (e.g.
     ``normalize.street``). ``structured`` is the corroborating JSON-LD value, or
-    ``ABSENT`` if none was offered. A blank expected fact, or a field the source
-    does not track, is ``SKIPPED`` — never asserted against.
+    ``ABSENT`` if none was offered. ``expected`` may be an :class:`AnyOf`, which
+    passes if the observed value matches any of its non-blank values. A blank
+    expected fact (for ``AnyOf``: every value blank), or a field the source does
+    not track, is ``SKIPPED`` — never asserted against.
     """
-    if is_blank(expected):
+    candidates = expected.values if isinstance(expected, AnyOf) else (expected,)
+    accepted = [value for value in candidates if not is_blank(value)]
+    if not accepted:
         return CheckResult.skipped(site, name, summary="no expected value set")
+    # Reported as the single value, or the list of accepted values.
+    reported = accepted[0] if len(accepted) == 1 else accepted
 
     if not observed.is_found:
         return _not_found_result(site, name, observed)
@@ -51,14 +70,14 @@ def check_field(
     # Found a value. Normalize both sides; a normalizer that rejects the *observed*
     # value means the page had something we can't model -> PARSE_ERROR. A normalizer
     # that rejects the *expected* fact is our own config bug, so let it raise loudly.
-    expected_norm = normalizer(expected)
+    accepted_norm = [normalizer(value) for value in accepted]
     try:
         observed_norm = normalizer(observed.value)
     except ValueError as err:
         return CheckResult.parse_error(site, name, detail=f"observed value not modelable: {err}")
 
-    if observed_norm != expected_norm:
-        return CheckResult.mismatch(site, name, expected=expected, observed=observed.value)
+    if observed_norm not in accepted_norm:
+        return CheckResult.mismatch(site, name, expected=reported, observed=observed.value)
 
     # Visible value is correct. Corroborate against structured metadata if offered:
     # disagreement is drift (worth fixing), not a world-state mismatch.
@@ -66,17 +85,17 @@ def check_field(
         try:
             structured_norm = normalizer(structured)
         except ValueError:
-            structured_norm = expected_norm  # unmodelable metadata -> no drift signal
-        if structured_norm != expected_norm:
+            structured_norm = observed_norm  # unmodelable metadata -> no drift signal
+        if structured_norm not in accepted_norm:
             return CheckResult.metadata_drift(
                 site,
                 name,
-                expected=expected,
+                expected=reported,
                 observed=observed.value,
                 detail=f"structured metadata says {structured!r} but visible value is correct",
             )
 
-    return CheckResult.ok(site, name, expected=expected, observed=observed.value)
+    return CheckResult.ok(site, name, expected=reported, observed=observed.value)
 
 
 def _not_found_result(site: str, name: str, observed: Observed[Any]) -> CheckResult:

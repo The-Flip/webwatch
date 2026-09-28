@@ -107,6 +107,8 @@ class Source(ABC):
 
     #: Stable identifier used in reports, the registry, and fixtures.
     name: str
+    #: Short human name for reports, e.g. "Apple Maps" (defaults to ``name``).
+    label: str = ""
     #: The page to fetch.
     url: str
     #: Fact names this source is designed to read. Anything else is NOT_SUPPORTED.
@@ -122,6 +124,19 @@ class Source(ABC):
         """Every tracked field as ``BLOCKED`` — used when the fetch hit a challenge."""
         return Observation(self.site, {name: Observed.blocked(note) for name in self.tracks})
 
+    def request_headers(self) -> dict[str, str]:
+        """Extra HTTP headers for this source's request (e.g. an API key). Default: none.
+
+        Raise :class:`~webwatch.fetch.FetchError` if a required credential is missing —
+        that surfaces as ``FETCH_ERROR`` (unhealthy), never a silent skip.
+        """
+        return {}
+
+    @property
+    def display_name(self) -> str:
+        """The short human name for reports: ``label``, or ``name`` if unset."""
+        return self.label or self.name
+
     @property
     def site(self) -> str:
         return self.name
@@ -133,7 +148,7 @@ class Source(ABC):
         raises :class:`~webwatch.fetch.FetchError` for the caller to map to
         ``FETCH_ERROR`` (so one failure doesn't masquerade as many).
         """
-        result: FetchResult = fetch(self.url, transport=transport)
+        result: FetchResult = fetch(self.url, headers=self.request_headers(), transport=transport)
         if result.blocked:
             return self.blocked_observation(result.block_reason or "blocked")
         return self.observe(result.text)

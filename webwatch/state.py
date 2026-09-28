@@ -146,6 +146,15 @@ def mark_notified(state: State, transitions: list[Transition]) -> None:
                 check_state.notified = True
 
 
+def latest_statuses(state: State) -> dict[tuple[str, str], CheckStatus]:
+    """Each tracked check's most recent status, keyed ``(site, name)`` (run order)."""
+    statuses = {}
+    for key, check_state in state.items():
+        site, _, name = key.partition("\t")
+        statuses[(site, name)] = CheckStatus(check_state.status)
+    return statuses
+
+
 def alerting_checks(state: State) -> list[tuple[str, str, str]]:
     """Every currently-alerting check as ``(site, name, last_status)``, sorted.
 

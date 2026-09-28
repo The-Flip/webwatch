@@ -17,11 +17,18 @@ from webwatch import facts as facts_module
 from webwatch.checks import registry as checks_registry
 from webwatch.facts import FactsError
 from webwatch.notify.email import EmailContent, render_digest, render_email, send_from_config
-from webwatch.report import render_json, render_text
+from webwatch.report import render_json, render_matrix, render_text
 from webwatch.result import exit_code
 from webwatch.run import register_builtins, run_checks
 from webwatch.sources import registry as sources_registry
-from webwatch.state import alerting_checks, apply_results, load_state, mark_notified, save_state
+from webwatch.state import (
+    alerting_checks,
+    apply_results,
+    latest_statuses,
+    load_state,
+    mark_notified,
+    save_state,
+)
 
 
 @click.group()
@@ -192,7 +199,10 @@ def digest(dry_run: bool | None, only_problems: bool) -> None:
         click.echo("No open problems; nothing to send.")
         return
 
-    content = render_digest(open_problems, total=len(state))
+    register_builtins()
+    site_labels = {source.name: source.display_name for source in sources_registry.all_sources()}
+    matrix = render_matrix(latest_statuses(state), site_labels) if state else ""
+    content = render_digest(open_problems, total=len(state), matrix=matrix)
     resolved_dry_run = config.EMAIL_DRY_RUN if dry_run is None else dry_run
     try:
         if send_from_config(content, dry_run=resolved_dry_run, printer=click.echo):

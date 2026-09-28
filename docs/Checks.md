@@ -36,8 +36,13 @@ A listing page can quietly turn into a page about a different business: listings
 
 - **In the source (pure).** The page has to identify itself as the listing we asked for, e.g. its embedded place-id equals the one in `url`. If it doesn't, every field is `missing` → `STRUCTURE_CHANGED`.
 - **In the checks (`Check.requires`).** Check the listing's `name` against `facts.yaml`, and give every other check `requires="name"`. If `name` is not `OK`, the run loop reports each dependent check as `STRUCTURE_CHANGED` ("prerequisite … did not pass") instead of asserting it. A prerequisite excluded by `--fact` is still evaluated, just not reported.
+  - **Exception:** a field that says the listing is closed or unavailable (e.g. Google's `business_status`) is _not_ gated on `name`. A listing that's been renamed _and_ marked closed must still raise the closure. The source-level self-identity check still protects it. See `webwatch/sources/google_maps.py`.
 
 Listing sites often embed their own place data as JSON (Apple's `shell-props`). Treat it as `structured` corroboration, exactly like JSON-LD: the visible value decides, and a stale payload is `METADATA_DRIFT`. Parse it defensively. If it has an unexpected shape, the result is "no corroboration", never a crash.
+
+## API-backed sources
+
+When a site only renders with JavaScript, use its official API if it has one (Google Maps → Places API). Override `request_headers()` to send the credential, and raise `FetchError` if it isn't configured. Capture a real response with `scripts/capture_fixture.py --source <name>`. See [Extraction.md](Extraction.md#blocked-and-js-rendered-pages) for how the status mapping carries over.
 
 ## Don'ts
 

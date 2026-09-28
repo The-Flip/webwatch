@@ -47,6 +47,12 @@ def test_render_digest_lists_open_problems() -> None:
     assert "site/addr [blocked]" in content.body
 
 
+def test_render_digest_includes_the_matrix_when_given() -> None:
+    content = render_digest([], total=1, matrix="check  Site\nname   ok")
+    assert "Latest result of each check" in content.body
+    assert content.body.endswith("check  Site\nname   ok")
+
+
 def test_render_digest_all_clear() -> None:
     content = render_digest([], total=5)
     assert "all clear" in content.subject

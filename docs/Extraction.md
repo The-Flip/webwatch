@@ -57,7 +57,11 @@ Compare through [`webwatch/normalize.py`](../webwatch/normalize.py), never with 
 
 ## Blocked and JS-rendered pages
 
-`fetch.py` retrieves static HTML via `httpx`. Some pages return a 200 that is actually a Cloudflare challenge, a login wall, or an empty React/Vue shell that only populates after client-side hydration. Detect these and return `BLOCKED` — an access problem distinct from a layout change, so triage isn't sent chasing phantom selector bugs. `fetch.py` keeps a transport seam so a JS-rendering fetcher (e.g. Playwright) or an official API can be plugged in per-source later. The Flip's own site is server-rendered; we cross that bridge when a JS-only site is added.
+`fetch.py` retrieves static HTML via `httpx`. Some pages return a 200 that is actually a Cloudflare challenge, a login wall, or an empty React/Vue shell that only populates after client-side hydration. Detect these and return `BLOCKED` — an access problem distinct from a layout change, so triage isn't sent chasing phantom selector bugs. When a site is JS-only, prefer its **official API** to rendering it. A source can send extra request headers through `Source.request_headers()` (e.g. an API key; see [`webwatch/sources/google_maps.py`](../webwatch/sources/google_maps.py) for Google Maps via the Places API). The doctrine carries over:
+
+- The API's JSON _is_ the observation, so there's no visible/structured split and no `METADATA_DRIFT`.
+- A requested field the response leaves out is `missing` → `STRUCTURE_CHANGED`, never a synthetic "not listed" `MISMATCH`.
+- A credential goes in a header, never the URL, so it can't leak into errors. A missing credential raises `FetchError` → `FETCH_ERROR`. It must never be `SKIPPED`, which counts as healthy and would quietly clear an alert.
 
 ## Breakage detection
 

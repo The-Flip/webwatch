@@ -92,7 +92,12 @@ def looks_blocked(text: str, status_code: int, headers: dict[str, str] | None = 
     """Return a reason if the response looks like a block/challenge, else ``None``.
 
     Checks happen regardless of status code (challenges commonly arrive as 403/503).
+    A JSON body (an API response) is never a challenge page: its error text is an
+    API error to report as such, not a block.
     """
+    content_type = {k.lower(): v for k, v in (headers or {}).items()}.get("content-type", "")
+    if "json" in content_type.lower():
+        return None
     lowered = text.lower()
     for marker in _BLOCK_MARKERS:
         if marker in lowered:
@@ -101,6 +106,24 @@ def looks_blocked(text: str, status_code: int, headers: dict[str, str] | None = 
     if _JS_MOUNT.search(text) and _visible_text_length(text) < 64:
         return "empty JS-hydration shell (no server-rendered content)"
     return None
+
+
+_ERROR_SNIPPET_CHARS = 200
+
+
+def _error_reason(response: httpx.Response) -> str:
+    """A short excerpt of a non-HTML error body (e.g. an API's JSON error), else ``""``.
+
+    API errors explain themselves ("API key not valid"); HTML error pages are noise.
+    """
+    if "html" in response.headers.get("content-type", "").lower():
+        return ""
+    body = " ".join(response.text.split())
+    if not body:
+        return ""
+    if len(body) > _ERROR_SNIPPET_CHARS:
+        body = body[:_ERROR_SNIPPET_CHARS] + "…"
+    return f": {body}"
 
 
 def _backoff_seconds(response: httpx.Response | None, attempt: int, base: float) -> float:
@@ -115,6 +138,7 @@ def _backoff_seconds(response: httpx.Response | None, attempt: int, base: float)
 def fetch(
     url: str,
     *,
+    headers: dict[str, str] | None = None,
     transport: httpx.BaseTransport | None = None,
     throttle: DomainThrottle | None = None,
     max_retries: int | None = None,
@@ -125,18 +149,20 @@ def fetch(
 
     Retries transient failures (``429``/``5xx`` and transport errors) up to
     ``max_retries`` times, then raises :class:`FetchError`. A block/challenge is
-    returned (not raised) with ``blocked=True``.
+    returned (not raised) with ``blocked=True``. ``headers`` are sent in addition to
+    (and may override) the User-Agent — e.g. an API key, which belongs in a header
+    and never in ``url``, so it can't leak into error messages.
     """
     retries = config.HTTP_MAX_RETRIES if max_retries is None else max_retries
     if throttle is not None:
         throttle.wait(httpx.URL(url).host)
 
-    headers = {"User-Agent": config.USER_AGENT}
+    request_headers = {"User-Agent": config.USER_AGENT, **(headers or {})}
     last_error: Exception | None = None
 
     with httpx.Client(
         transport=transport,
-        headers=headers,
+        headers=request_headers,
         timeout=config.HTTP_TIMEOUT,
         follow_redirects=True,
     ) as client:
@@ -165,10 +191,17 @@ def fetch(
                             text=response.text,
                             headers=dict(response.headers),
                         )
-                    raise FetchError(f"{url} returned HTTP {response.status_code}")
-                last_error = FetchError(f"{url} returned HTTP {response.status_code}")
+                    raise FetchError(
+                        f"{url} returned HTTP {response.status_code}{_error_reason(response)}"
+                    )
+                last_error = FetchError(
+                    f"{url} returned HTTP {response.status_code}{_error_reason(response)}"
+                )
 
             if attempt < retries:
                 sleep(_backoff_seconds(response, attempt, backoff_base))
 
-    raise FetchError(f"failed to fetch {url} after {retries + 1} attempt(s)") from last_error
+    reason = f" (last: {last_error})" if last_error is not None else ""
+    raise FetchError(
+        f"failed to fetch {url} after {retries + 1} attempt(s){reason}"
+    ) from last_error

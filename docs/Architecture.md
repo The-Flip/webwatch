@@ -5,7 +5,7 @@ Webwatch is a small Python CLI that checks the places The Flip appears on the we
 ## Components
 
 - **`webwatch.config`** — Loads configuration and secrets from the environment (via `python-decouple`). The single place that reads `os.environ`. Everything else imports typed values from here.
-- **`webwatch.fetch`** — The one HTTP boundary. Wraps `httpx` with a descriptive User-Agent, timeout, retry/backoff for transient errors, and a per-domain politeness delay. All network access goes through here so it is uniform and easy to mock.
+- **`webwatch.fetch`** — The one HTTP boundary. Wraps `httpx` with a descriptive User-Agent, timeout, retry/backoff for transient errors, and a per-domain politeness delay. A source can add request headers, such as an API key; keys go in headers, never URLs. For non-HTML error responses (API errors), the error message includes a short excerpt of the body. All network access goes through here so it is uniform and easy to mock.
 - **`webwatch.extract`** — Robust extraction primitives, independent of any one site:
   - `structured.py` — pulls JSON-LD / schema.org / microdata via `extruct`.
   - `anchors.py` — locates values by stable semantic anchors (label text, microformats, roles).
