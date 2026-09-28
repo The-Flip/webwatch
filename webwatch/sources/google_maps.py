@@ -63,9 +63,12 @@ def _point(point: object) -> tuple[int, int, int]:
     if not isinstance(point, dict) or point.get("truncated"):
         raise _UnmodeledHoursError(f"unexpected point {point!r}")
     values = tuple(point.get(key, 0) for key in ("day", "hour", "minute"))
-    day, hour, minute = values
-    if not all(isinstance(v, int) for v in values) or not 0 <= day <= 6:
+    # bool is an int subclass, so exclude it explicitly.
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
         raise _UnmodeledHoursError(f"unexpected point {point!r}")
+    day, hour, minute = values
+    if not (0 <= day <= 6 and 0 <= hour <= 23 and 0 <= minute <= 59):
+        raise _UnmodeledHoursError(f"point out of range {point!r}")
     return day, hour, minute
 
 

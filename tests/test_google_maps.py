@@ -141,6 +141,22 @@ def test_period_spanning_days_makes_all_hours_parse_error() -> None:
     assert {statuses[f"hours.{d}"] for d in ("monday", "sunday")} == {CheckStatus.PARSE_ERROR}
 
 
+@pytest.mark.parametrize(
+    "bad_point",
+    [
+        {"day": 1, "hour": 25, "minute": 0},  # hour out of range
+        {"day": 1, "hour": 10, "minute": 99},  # minute out of range
+        {"day": 1, "hour": True, "minute": 0},  # bool is an int subclass in Python
+    ],
+)
+def test_invalid_point_makes_all_hours_parse_error(bad_point: dict[str, Any]) -> None:
+    def corrupt(place: dict[str, Any]) -> None:
+        _period_for(place, 1)["close"] = bad_point
+
+    statuses = _statuses(_mutated(corrupt))
+    assert {statuses[f"hours.{d}"] for d in ("monday", "sunday")} == {CheckStatus.PARSE_ERROR}
+
+
 def test_missing_opening_hours_is_structure_changed() -> None:
     statuses = _statuses(_mutated(lambda p: p.pop("regularOpeningHours")))
     assert statuses["hours.monday"] is CheckStatus.STRUCTURE_CHANGED
