@@ -114,3 +114,91 @@ def test_day_hours_rejects_bad_shape() -> None:
 def test_day_hours_rejects_unparseable_string() -> None:
     with pytest.raises(ValueError):
         normalize.day_hours("by appointment")
+
+
+# --- day labels (expand_days) ---------------------------------------------------
+
+
+def test_expand_full_range() -> None:
+    assert normalize.expand_days("Monday - Saturday") == [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+    ]
+
+
+def test_expand_single_day() -> None:
+    assert normalize.expand_days("Sunday") == ["sunday"]
+
+
+def test_expand_non_day_is_empty() -> None:
+    assert normalize.expand_days("Private Tours") == []
+
+
+def test_expand_wraps_around_week() -> None:
+    assert normalize.expand_days("Saturday - Tuesday") == [
+        "saturday",
+        "sunday",
+        "monday",
+        "tuesday",
+    ]
+
+
+def test_expand_en_dash_wraparound_abbreviations() -> None:
+    # Apple Maps renders en-dash ranges that can wrap the week (Sunday through Monday).
+    assert normalize.expand_days("Sun \u2013 Mon") == ["sunday", "monday"]
+
+
+def test_expand_unrecognized_endpoint_is_empty() -> None:
+    assert normalize.expand_days("Mon - Someday") == []
+
+
+def test_expand_abbreviations_and_to() -> None:
+    assert normalize.expand_days("Mon - Fri") == [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+    ]
+    assert normalize.expand_days("Mon to Wed") == ["monday", "tuesday", "wednesday"]
+
+
+# --- urls -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("https://www.theflip.museum/", "https://www.theflip.museum"),
+        ("HTTPS://WWW.TheFlip.museum/", "https://www.theflip.museum/"),
+        ("https://www.theflip.museum/#visit", "https://www.theflip.museum"),
+        (
+            "https://www.theflip.museum/?utm_source=apple&utm_medium=maps",
+            "https://www.theflip.museum",
+        ),
+    ],
+)
+def test_url_equivalences(a: str, b: str) -> None:
+    assert normalize.url(a) == normalize.url(b)
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("http://www.theflip.museum/", "https://www.theflip.museum/"),
+        ("https://theflip.museum/", "https://www.theflip.museum/"),
+        ("https://www.theflip.museum/visit", "https://www.theflip.museum/"),
+        ("https://www.theflip.museum/?page=2", "https://www.theflip.museum/"),
+    ],
+)
+def test_url_differences(a: str, b: str) -> None:
+    assert normalize.url(a) != normalize.url(b)
+
+
+def test_url_rejects_relative() -> None:
+    with pytest.raises(ValueError):
+        normalize.url("theflip.museum")

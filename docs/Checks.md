@@ -11,24 +11,33 @@ Sources do the reading; checks do the judging. Keep them separate so one fetch f
 
 ## Steps
 
-1. **Capture a golden fixture.** Run `uv run python scripts/capture_fixture.py <url>` to save the page under `tests/fixtures/<source>_<date>.html`. Inspect it; don't guess the structure.
+1. **Capture a golden fixture.** Run `uv run python scripts/capture_fixture.py <url> <source>` to save the page under `tests/fixtures/<source>_<date>.html`. Inspect it; don't guess the structure.
 
 2. **Write the source** in `webwatch/sources/<site>.py`:
    - Subclass the `Source` base (`webwatch/sources/base.py`). Declare the page URL and the anchors each field depends on.
    - Extract via the [layered strategy](Extraction.md#layered-extraction-stable-signals-first): structured data (corroboration) + semantic anchors (authoritative). Use the primitives in `webwatch/extract/`.
    - Return an `Observation` whose fields are either a located value or an explicit "not found". Never an empty string standing in for a real value.
-   - Register it in `webwatch/sources/registry.py`.
+   - Expose `SOURCE` and `CHECKS` from the module and add the pair to `_BUILTINS` in `webwatch/run.py`, which registers both registries.
 
 3. **Write the checks** in `webwatch/checks/`:
    - Compare the observed field to the relevant `facts.yaml` value, **through `normalize.py`**.
    - Map outcomes to `CheckStatus` honestly: read+matches → `OK`; read+differs → `MISMATCH`; field "not found" → `STRUCTURE_CHANGED`; unparseable → `PARSE_ERROR`; blocked/challenge → `BLOCKED`. A blank expected fact → `SKIPPED`.
-   - Register the `(source, fact)` mapping in `webwatch/checks/registry.py`.
+   - Declare them as `Check(...)` specs in the source module's `CHECKS` (see `webwatch/checks/registry.py`). Weekly hours use the shared `hours_checks()`, and day labels go through `normalize.expand_days`.
 
 4. **Add the facts** to `facts.yaml` (or a rule) — see [Facts.md](Facts.md). Leave values empty / `enabled: false` until verified.
 
 5. **Write tests** in `tests/test_<site>.py` against the golden fixture, proving every status by [in-memory mutation](Testing.md#prove-every-status-by-mutation). This is required, not optional.
 
 6. **Verify end-to-end:** `webwatch check --site <site>` against the fixture, and `make quality && make test`.
+
+## Third-party listings (maps, review sites)
+
+A listing page can quietly turn into a page about a different business: listings get merged, a place-id gets mistyped, or a search result resolves to the wrong place. Asserting hours against someone else's page would produce a burst of false `MISMATCH`es. Guard the identity twice (see `webwatch/sources/apple_maps.py`):
+
+- **In the source (pure).** The page has to identify itself as the listing we asked for, e.g. its embedded place-id equals the one in `url`. If it doesn't, every field is `missing` → `STRUCTURE_CHANGED`.
+- **In the checks (`Check.requires`).** Check the listing's `name` against `facts.yaml`, and give every other check `requires="name"`. If `name` is not `OK`, the run loop reports each dependent check as `STRUCTURE_CHANGED` ("prerequisite … did not pass") instead of asserting it. A prerequisite excluded by `--fact` is still evaluated, just not reported.
+
+Listing sites often embed their own place data as JSON (Apple's `shell-props`). Treat it as `structured` corroboration, exactly like JSON-LD: the visible value decides, and a stale payload is `METADATA_DRIFT`. Parse it defensively. If it has an unexpected shape, the result is "no corroboration", never a crash.
 
 ## Don'ts
 

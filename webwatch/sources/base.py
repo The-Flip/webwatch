@@ -82,7 +82,8 @@ class Observation:
     """Everything one source read from its page in a single fetch.
 
     ``fields`` are the visible/authoritative reads. ``structured`` holds the
-    corroborating values pulled from JSON-LD (field name -> value), used by the
+    corroborating values pulled from structured metadata — JSON-LD, or a site's own
+    embedded JSON payload (field name -> value) — used by the
     checks layer to detect metadata drift without letting metadata decide.
     ``events`` carries the page's upcoming events for the rules engine: ``found``
     a list when the events section was located, ``missing`` when it wasn't, and
