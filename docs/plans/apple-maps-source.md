@@ -169,4 +169,4 @@ The pre-PR reviewers (documentation, antipattern, clean-code, code-smell) led to
 - `normalize.url` drops `utm_*` campaign parameters, so a listing that tags its outbound link can't raise a false `MISMATCH`. Any other query difference still counts.
 - An empty `weeklyHours` list means "no corroboration", not "closed every day".
 - The source-level place-id guard is documented as a coarse filter. The `name` prerequisite is the decisive identity check.
-- Apple's origin-restricted MapKit client JWTs were redacted from the committed fixture (detect-secrets flagged them). Extraction doesn't use them.
+- Credential-like values were redacted from the committed fixture: Apple's origin-restricted MapKit client JWTs (flagged by detect-secrets), the `emailWidgetServiceKey`, and the snapshot-URL signatures (flagged in CodeRabbit review). Extraction doesn't use any of them.
