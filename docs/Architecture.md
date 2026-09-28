@@ -11,7 +11,8 @@ Webwatch is a small Python CLI that checks the places The Flip appears on the we
   - `anchors.py` — locates values by stable semantic anchors (label text, microformats, roles).
 - **`webwatch.sources`** — One module per site. A `Source` fetches its page **once** and returns a typed `Observation` (the facts it could read, each tagged with how confidently). Sources own the site-specific knowledge: which URL, which anchors, how to read each field.
 - **`webwatch.normalize`** — Canonicalizes values (whitespace, phone formats, street abbreviations, hours/timezone) so comparison is semantic, not literal.
-- **`webwatch.checks`** — Assertions. Given a `Source`'s `Observation` and the canonical `facts.yaml`/rules, each check produces a `CheckResult`. This is where "matches / differs / couldn't read" is decided.
+- **`webwatch.checks`** — Assertions. Given a `Source`'s `Observation` and the canonical `facts.yaml`/rules, each check produces a `CheckResult`. This is where "matches / differs / couldn't read" is decided. A check can `require` another check on the same source (e.g. a listing's `name`). `PrerequisiteGate` reports it `STRUCTURE_CHANGED`, without asserting it, unless that prerequisite is `OK`. See [Checks.md](Checks.md#third-party-listings-maps-review-sites).
+- **`webwatch.run`** — Orchestration: registers the built-in sources and their checks (`_BUILTINS`), fetches each source once, and runs its checks and rules through the prerequisite gate.
 - **`webwatch.facts` / `webwatch.rules`** — Load and validate `facts.yaml`; evaluate dynamic rules (e.g. recurring events) against a clock that is injected for testability.
 - **`webwatch.result`** — `CheckStatus` and `CheckResult`: the core abstraction (see [Extraction.md](Extraction.md)).
 - **`webwatch.state`** — Loads/saves run-to-run state (last status, consecutive-failure counts) so notifications can fire on transitions instead of every run.

@@ -16,17 +16,23 @@ from webwatch.run import run_checks
 FIXTURES = Path(__file__).parent / "fixtures"
 HOME = (FIXTURES / "theflip_museum_2026-06-24.html").read_text(encoding="utf-8")
 VISIT = (FIXTURES / "theflip_museum_visit_2026-06-24.html").read_text(encoding="utf-8")
+APPLE_MAPS = (FIXTURES / "apple_maps_2026-09-26.html").read_text(encoding="utf-8")
 FACTS = load_facts("facts.yaml")
 # Pinned to the fixtures' capture date so the expired-events check is deterministic
 # (the listed events — Jun 27, Jul 4, Jul 11 — are all upcoming as of this date).
 NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=ZoneInfo("America/Chicago"))
 
 
-def _router() -> httpx.MockTransport:
-    """Serve the right fixture per URL path, so each source sees its own page."""
+def _router(*, apple_maps: str = APPLE_MAPS) -> httpx.MockTransport:
+    """Serve the right fixture per host and path, so each source sees its own page."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        html = VISIT if request.url.path.rstrip("/") == "/visit" else HOME
+        if request.url.host == "maps.apple.com":
+            html = apple_maps
+        elif request.url.path.rstrip("/") == "/visit":
+            html = VISIT
+        else:
+            html = HOME
         return httpx.Response(200, html=html)
 
     return httpx.MockTransport(handler)
@@ -40,7 +46,7 @@ def test_all_checks_ok_against_fixtures() -> None:
     assert all(r.status is CheckStatus.OK for r in results), [
         (r.site, r.name, r.status) for r in results if r.status is not CheckStatus.OK
     ]
-    assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit"}
+    assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit", "apple_maps"}
     assert any(r.name == "weekly-repair-day" for r in results)
     assert any(r.name == "expired_events" for r in results)
     assert exit_code(results) == EXIT_OK
@@ -105,3 +111,39 @@ def test_one_crashing_check_does_not_kill_the_run(monkeypatch: pytest.MonkeyPatc
     assert expired and all(r.status is CheckStatus.STRUCTURE_CHANGED for r in expired)
     # Other checks still ran (the crash didn't abort the whole run).
     assert any(r.name == "email" and r.status is CheckStatus.OK for r in results)
+
+
+# --- check prerequisites (Check.requires) -----------------------------------------
+
+
+def _other_business() -> str:
+    """The Apple Maps page, but for a business with a different name and hours."""
+    html = APPLE_MAPS.replace(">The Flip</h1>", ">Flip Side</h1>")
+    return html.replace("<span>10:00</span>", "<span>9:00</span>")
+
+
+def test_failed_identity_gates_dependent_checks() -> None:
+    results = run_checks(FACTS, site="apple_maps", transport=_router(apple_maps=_other_business()))
+    by_name = {r.name: r for r in results}
+    assert by_name["name"].status is CheckStatus.MISMATCH
+    # Hours differ too, but must not be asserted against another business's page.
+    assert by_name["hours.monday"].status is CheckStatus.STRUCTURE_CHANGED
+    assert "prerequisite" in (by_name["hours.monday"].detail or "")
+    assert not any(r.status is CheckStatus.MISMATCH for r in results if r.name != "name")
+
+
+def test_prerequisite_is_evaluated_even_when_filtered_out() -> None:
+    results = run_checks(
+        FACTS,
+        site="apple_maps",
+        fact="hours.monday",
+        transport=_router(apple_maps=_other_business()),
+    )
+    assert [(r.name, r.status) for r in results] == [
+        ("hours.monday", CheckStatus.STRUCTURE_CHANGED)
+    ]
+
+
+def test_passing_prerequisite_lets_dependent_checks_run() -> None:
+    results = run_checks(FACTS, site="apple_maps", fact="hours.monday", transport=_router())
+    assert [(r.name, r.status) for r in results] == [("hours.monday", CheckStatus.OK)]

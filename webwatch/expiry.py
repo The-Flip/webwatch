@@ -20,7 +20,6 @@ _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }  # fmt: skip
-_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
 def _month_number(text: str) -> int | None:
@@ -63,7 +62,7 @@ def end_date(event: Event, *, now: dt.datetime) -> dt.date | None:
 
     if event.weekday:
         wanted = normalize.text(event.weekday)
-        in_window = [c for c in in_window if _WEEKDAYS[c.weekday()] == wanted]
+        in_window = [c for c in in_window if normalize.WEEKDAYS[c.weekday()] == wanted]
 
     if not in_window:
         return None

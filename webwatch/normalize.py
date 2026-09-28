@@ -13,6 +13,7 @@ for why the street/phone/hours handling is deliberately not naive.
 from __future__ import annotations
 
 import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _WS = re.compile(r"\s+")
 
@@ -54,6 +55,15 @@ _TIME_RANGE_SEP = re.compile(rf"\s*(?:[{_DASH_CLASS}]|to)\s*", re.IGNORECASE)
 _TIME = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?$", re.IGNORECASE)
 
 MINUTES_PER_DAY = 24 * 60
+
+# Canonical weekday names, Monday first (matching ``datetime.weekday()``).
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_DAY_INDEX = {day: i for i, day in enumerate(WEEKDAYS)}
+# Full names and 3-letter abbreviations both resolve to the canonical weekday.
+_DAY_ALIASES = {alias: day for day in WEEKDAYS for alias in (day, day[:3])}
+# Split a day range on a dash or a space-delimited "to" ("to" is space-bounded so
+# it doesn't split inside words like "Tours").
+_DAY_RANGE_SEP = re.compile(rf"\s*[{_DASH_CLASS}]\s*|\s+to\s+", re.IGNORECASE)
 
 
 def collapse_whitespace(value: str) -> str:
@@ -108,6 +118,47 @@ def street(value: str) -> tuple[str, ...]:
 def postal_code(value: str) -> str:
     """Canonical postal code: uppercased, inner spaces removed."""
     return re.sub(r"\s+", "", value).upper()
+
+
+def url(value: str) -> str:
+    """Canonical URL form: scheme and host lowercased; trailing ``/``, fragment, and
+    ``utm_*`` campaign-tracking parameters dropped.
+
+    So ``HTTPS://www.TheFlip.museum/`` and ``https://www.theflip.museum/?utm_source=x``
+    compare equal (listing sites often tag outbound links), while a different scheme,
+    host, path, or any other query parameter still differs. Raises ``ValueError``
+    for anything without a scheme and host.
+    """
+    parts = urlsplit(value.strip())
+    if not parts.scheme or not parts.netloc:
+        raise ValueError(f"not an absolute URL: {value!r}")
+    path = parts.path.rstrip("/")
+    params = parse_qsl(parts.query, keep_blank_values=True)
+    query = urlencode([(k, v) for k, v in params if not k.lower().startswith("utm_")])
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+
+
+def expand_days(label: str) -> list[str]:
+    """Expand a day label into canonical weekdays.
+
+    ``"Monday - Saturday"`` -> the six days; ``"Sunday"`` -> ``["sunday"]``;
+    a wrap-around like ``"Saturday - Tuesday"`` -> sat, sun, mon, tue. Anything not
+    recognizable as a day (or range) yields ``[]`` — so an unreadable label degrades
+    to a missing day, never a guess.
+    """
+    parts = [part for part in _DAY_RANGE_SEP.split(label.strip().lower()) if part]
+    days = [_DAY_ALIASES.get(part) for part in parts]
+    if len(days) == 1 and days[0] is not None:
+        return [days[0]]
+    if len(days) == 2:
+        first, last = days
+        if first is None or last is None:
+            return []
+        start, end = _DAY_INDEX[first], _DAY_INDEX[last]
+        if start <= end:
+            return list(WEEKDAYS[start : end + 1])
+        return list(WEEKDAYS[start:]) + list(WEEKDAYS[: end + 1])
+    return []
 
 
 def time_to_minutes(value: str) -> int:

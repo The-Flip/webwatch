@@ -16,11 +16,14 @@ import httpx
 from webwatch import config, rules
 from webwatch.checks import registry as checks_registry
 from webwatch.checks.base import fetch_error_results
+from webwatch.checks.registry import PrerequisiteGate
 from webwatch.expiry import check_expired_events
 from webwatch.facts import Facts
 from webwatch.fetch import FetchError
 from webwatch.result import CheckResult
 from webwatch.sources import registry as sources_registry
+from webwatch.sources.apple_maps import CHECKS as APPLE_MAPS_CHECKS
+from webwatch.sources.apple_maps import SOURCE as APPLE_MAPS_SOURCE
 from webwatch.sources.theflip_museum import CHECKS as THEFLIP_CHECKS
 from webwatch.sources.theflip_museum import SOURCE as THEFLIP_SOURCE
 from webwatch.sources.theflip_museum_visit import CHECKS as VISIT_CHECKS
@@ -31,6 +34,7 @@ _EXPIRED_EVENTS = "expired_events"
 _BUILTINS = [
     (THEFLIP_SOURCE, THEFLIP_CHECKS),
     (VISIT_SOURCE, VISIT_CHECKS),
+    (APPLE_MAPS_SOURCE, APPLE_MAPS_CHECKS),
 ]
 
 
@@ -65,9 +69,10 @@ def run_checks(
     for source in sources_registry.all_sources():
         if site is not None and source.name != site:
             continue
-        checks = checks_registry.checks_for(source.name)
-        if fact is not None:
-            checks = [check for check in checks if check.field == fact]
+        # The gate sees every check on the source, so a prerequisite that --fact
+        # filters out of the report is still evaluated.
+        all_checks = checks_registry.checks_for(source.name)
+        checks = all_checks if fact is None else [c for c in all_checks if c.field == fact]
 
         # Sources that read an events list also get the recurring-event rules and the
         # expired-events check run against them.
@@ -94,9 +99,10 @@ def run_checks(
         # Each check/rule is run defensively: a drastic page change can make
         # extraction raise (e.g. AttributeError), and catching it per item keeps one
         # broken check from killing the whole run (agy Phase E review).
+        gate = PrerequisiteGate(all_checks, observation, facts)
         for check in checks:
             try:
-                results.append(check.run(observation, facts))
+                results.append(gate.run(check))
             except Exception as err:
                 results.append(_crashed(source.name, check.field, err))
         for rule in event_rules:

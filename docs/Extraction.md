@@ -40,6 +40,7 @@ Concretely, an extraction primitive returns either a located value or an explici
 Prefer the most stable signals, but **structured data corroborates — it does not decide**:
 
 1. **Structured data** — JSON-LD / schema.org (`LocalBusiness`, `PostalAddress`, `openingHours`, `Event`) via `extruct`, in [`webwatch/extract/structured.py`](../webwatch/extract/structured.py). Machine-intended and stable, **but** frequently plugin- or SEO-managed and left stale while admins edit only the visible page. So it is never trusted alone.
+   - A site's **own embedded JSON payload** also counts as structured data (e.g. Apple Maps' `<script id="shell-props">`; see [`webwatch/sources/apple_maps.py`](../webwatch/sources/apple_maps.py)). It's hand-parsed rather than read via `extruct`, and the same corroboration rules apply. Because it's an undocumented internal format, parse it defensively: an unexpected shape means "no corroboration", never a crash or a guess.
 2. **Semantic anchors** — locate visible values by label text ("Hours", "Address"), microformats (h-card / h-event), or stable roles, in [`webwatch/extract/anchors.py`](../webwatch/extract/anchors.py). **Not** `nth-child` or long CSS paths — those break on any redesign and are exactly the brittleness we are avoiding.
 3. **Mandatory corroboration** — when a fact appears in both structured data and visible text, the comparison is driven by the **visible** value (it is what humans see):
    - `visible != expected` → `MISMATCH` (regardless of JSON-LD).

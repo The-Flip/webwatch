@@ -14,16 +14,19 @@ webwatch/                   # repo root (distribution & command are named "webwa
 │   ├── result.py           # CheckStatus / CheckResult — the core abstraction
 │   ├── state.py            # Run-to-run state (alert-on-transition / anti-flap)
 │   ├── report.py           # Render text/JSON reports; build the email body
+│   ├── run.py              # Orchestration: register built-ins, fetch once per source, run checks
 │   ├── extract/            # Robust extraction primitives
 │   │   ├── structured.py   #   JSON-LD / schema.org / microdata (extruct)
 │   │   └── anchors.py      #   semantic/label anchors
 │   ├── sources/            # Per-site scrapers
 │   │   ├── base.py         #   Source ABC: fetch() -> Observation; declares its anchors
 │   │   ├── registry.py     #   registry of sources
-│   │   └── theflip_museum.py
+│   │   ├── theflip_museum.py
+│   │   ├── theflip_museum_visit.py
+│   │   └── apple_maps.py
 │   ├── checks/             # Assertions over an Observation
 │   │   ├── base.py
-│   │   └── registry.py
+│   │   └── registry.py     #   Check specs, hours_checks(), PrerequisiteGate
 │   └── notify/
 │       └── email.py        # dry-run-able SMTP email
 ├── facts.yaml              # Canonical expected facts + rules (hand-maintained)

@@ -1,7 +1,8 @@
 """Tests for the /visit hours source: day-range parsing and the mutation matrix.
 
 Hours are read from the visible card, so the negative cases mutate that card. The
-day-range helper and the section-divider handling get direct coverage too.
+section-divider handling gets direct coverage too (``expand_days`` is tested with
+the other normalizers in ``test_normalize.py``).
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from webwatch.facts import load_facts
 from webwatch.result import CheckStatus
-from webwatch.sources.theflip_museum_visit import CHECKS, SOURCE, expand_days
+from webwatch.sources.theflip_museum_visit import CHECKS, SOURCE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-06-24.html"
 FACTS = load_facts("facts.yaml")
@@ -30,37 +31,6 @@ def _status(field: str, html: str) -> CheckStatus:
     observation = SOURCE.observe(html)
     check = next(c for c in CHECKS if c.field == field)
     return check.run(observation, FACTS).status
-
-
-# --- day-range helper ---------------------------------------------------------
-
-
-def test_expand_full_range() -> None:
-    assert expand_days("Monday - Saturday") == [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-    ]
-
-
-def test_expand_single_day() -> None:
-    assert expand_days("Sunday") == ["sunday"]
-
-
-def test_expand_non_day_is_empty() -> None:
-    assert expand_days("Private Tours") == []
-
-
-def test_expand_wraps_around_week() -> None:
-    assert expand_days("Saturday - Tuesday") == ["saturday", "sunday", "monday", "tuesday"]
-
-
-def test_expand_abbreviations_and_to() -> None:
-    assert expand_days("Mon - Fri") == ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    assert expand_days("Mon to Wed") == ["monday", "tuesday", "wednesday"]
 
 
 # --- against the real fixture -------------------------------------------------
