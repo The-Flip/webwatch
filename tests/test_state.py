@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
-from webwatch.result import CheckResult
-from webwatch.state import alerting_checks, apply_results, load_state, mark_notified, save_state
+from webwatch.result import CheckResult, CheckStatus
+from webwatch.state import (
+    CheckState,
+    alerting_checks,
+    apply_results,
+    latest_statuses,
+    load_state,
+    mark_notified,
+    save_state,
+)
 
 
 def _mismatch() -> CheckResult:
@@ -93,3 +101,14 @@ def test_alerting_checks_lists_only_alerting() -> None:
     ]
     state, _ = apply_results({}, results, alert_after=1, recover_after=1)
     assert alerting_checks(state) == [("site", "hours", "mismatch")]
+
+
+def test_latest_statuses_keys_by_site_and_check() -> None:
+    state = {
+        "apple_maps\tname": CheckState(status="ok"),
+        "google_maps\thours.monday": CheckState(status="mismatch", alerting=True),
+    }
+    assert latest_statuses(state) == {
+        ("apple_maps", "name"): CheckStatus.OK,
+        ("google_maps", "hours.monday"): CheckStatus.MISMATCH,
+    }

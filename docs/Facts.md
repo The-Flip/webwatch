@@ -20,6 +20,9 @@ organization:
     country: 'US'
   phone: '+1 555 123 4567'
   email: 'hello@example.org'
+  business_status: 'operational' # as listings report it; see below
+  listing_names: # other names map/listing sites may legitimately show
+    - "The Flip: Chicago's Playable Pinball Museum"
   hours:
     monday: '10:00 - 20:00' # a range string
     saturday: { open: '10:00', close: '17:00' } # or an open/close map
@@ -30,6 +33,8 @@ organization:
 Conventions:
 
 - Each day's hours may be written three ways, all equivalent after normalization (`normalize.day_hours`): a range string (`"10:00 - 20:00"`, or comma-separated for multiple windows `"9-12, 1-5"`), an `{open, close}` map, a list of either, or the literal `closed`. Times accept 24h (`"17:00"`) or 12h (`"5 PM"`), and windows may cross midnight (`"18:00 - 02:00"`).
+- `listing_names` are other names that map and listing sites (Apple Maps, Google Maps) may show for the museum, such as Google's longer descriptive name. A listing's name check passes if it matches `name` or any of these exactly (case- and whitespace-insensitive), with no fuzzy matching. The museum's own site is still checked against `name` alone.
+- `business_status` is what listing sites should say about whether the museum is open for business at all. It's compared case-insensitively with Google's `businessStatus` (`OPERATIONAL` / `CLOSED_TEMPORARILY` / `CLOSED_PERMANENTLY`). If the museum ever closes temporarily, change it here (e.g. `closed_temporarily`) so listings that say so aren't flagged.
 - Leave a value as `""` (empty) to mean "not yet verified — don't check this." Checks treat empty expected facts as `SKIPPED` rather than asserting against a blank.
 - `facts.py` validates the shape on load and fails loudly on a malformed file.
 

@@ -121,13 +121,14 @@ def postal_code(value: str) -> str:
 
 
 def url(value: str) -> str:
-    """Canonical URL form: scheme and host lowercased; trailing ``/``, fragment, and
-    ``utm_*`` campaign-tracking parameters dropped.
+    """Canonical URL form: scheme and host lowercased; a leading ``www.``, trailing
+    ``/``, fragment, and ``utm_*`` campaign-tracking parameters dropped.
 
-    So ``HTTPS://www.TheFlip.museum/`` and ``https://www.theflip.museum/?utm_source=x``
-    compare equal (listing sites often tag outbound links), while a different scheme,
-    host, path, or any other query parameter still differs. Raises ``ValueError``
-    for anything without a scheme and host.
+    So ``HTTPS://www.TheFlip.museum/``, ``https://theflip.museum``, and
+    ``https://www.theflip.museum/?utm_source=x`` compare equal (a bare domain and its
+    ``www.`` form serve the same site, and listing sites often tag outbound links),
+    while a different scheme, domain, path, or any other query parameter still
+    differs. Raises ``ValueError`` for anything without a scheme and host.
     """
     parts = urlsplit(value.strip())
     if not parts.scheme or not parts.netloc:
@@ -135,7 +136,17 @@ def url(value: str) -> str:
     path = parts.path.rstrip("/")
     params = parse_qsl(parts.query, keep_blank_values=True)
     query = urlencode([(k, v) for k, v in params if not k.lower().startswith("utm_")])
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+    host = parts.netloc.lower().removeprefix("www.")
+    return urlunsplit((parts.scheme.lower(), host, path, query, ""))
+
+
+def week_hours(windows: dict[str, list[str]]) -> dict[str, str]:
+    """Per-weekday hours text from each day's ``"HH:MM - HH:MM"`` windows.
+
+    Days with several windows are comma-joined (as ``day_hours`` reads them); a
+    weekday with no windows — or missing from ``windows`` — is ``"closed"``.
+    """
+    return {day: ", ".join(windows.get(day, [])) or "closed" for day in WEEKDAYS}
 
 
 def expand_days(label: str) -> list[str]:

@@ -83,3 +83,25 @@ def test_repo_facts_yaml_parses() -> None:
 
 def test_module_exposes_dataclasses() -> None:
     assert facts.Address().street == ""
+
+
+def test_listing_names_parse_as_a_tuple() -> None:
+    parsed = parse_facts(
+        {"organization": {"name": "The Flip", "listing_names": ["The Flip Museum"]}}
+    )
+    assert parsed.organization.listing_names == ("The Flip Museum",)
+
+
+def test_listing_names_default_to_empty() -> None:
+    assert parse_facts({"organization": {"name": "The Flip"}}).organization.listing_names == ()
+
+
+@pytest.mark.parametrize("bad", ["The Flip Museum", [1, 2], {"a": "b"}])
+def test_listing_names_must_be_a_list_of_strings(bad: object) -> None:
+    with pytest.raises(FactsError, match="listing_names"):
+        parse_facts({"organization": {"listing_names": bad}})
+
+
+def test_listing_names_require_a_name() -> None:
+    with pytest.raises(FactsError, match=r"requires organization\.name"):
+        parse_facts({"organization": {"name": "", "listing_names": ["The Flip Museum"]}})

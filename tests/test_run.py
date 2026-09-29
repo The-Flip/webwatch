@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import secrets
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 HOME = (FIXTURES / "theflip_museum_2026-06-24.html").read_text(encoding="utf-8")
 VISIT = (FIXTURES / "theflip_museum_visit_2026-06-24.html").read_text(encoding="utf-8")
 APPLE_MAPS = (FIXTURES / "apple_maps_2026-09-26.html").read_text(encoding="utf-8")
+GOOGLE_MAPS = (FIXTURES / "google_maps_2026-09-28.json").read_text(encoding="utf-8")
 FACTS = load_facts("facts.yaml")
 # Pinned to the fixtures' capture date so the expired-events check is deterministic
 # (the listed events — Jun 27, Jul 4, Jul 11 — are all upcoming as of this date).
@@ -27,6 +29,10 @@ def _router(*, apple_maps: str = APPLE_MAPS) -> httpx.MockTransport:
     """Serve the right fixture per host and path, so each source sees its own page."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "places.googleapis.com":
+            return httpx.Response(
+                200, text=GOOGLE_MAPS, headers={"content-type": "application/json"}
+            )
         if request.url.host == "maps.apple.com":
             html = apple_maps
         elif request.url.path.rstrip("/") == "/visit":
@@ -38,6 +44,11 @@ def _router(*, apple_maps: str = APPLE_MAPS) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
+@pytest.fixture(autouse=True)
+def _google_places_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("webwatch.config.GOOGLE_PLACES_API_KEY", secrets.token_hex(16))
+
+
 def test_all_checks_ok_against_fixtures() -> None:
     from webwatch.result import EXIT_OK, exit_code
 
@@ -46,7 +57,12 @@ def test_all_checks_ok_against_fixtures() -> None:
     assert all(r.status is CheckStatus.OK for r in results), [
         (r.site, r.name, r.status) for r in results if r.status is not CheckStatus.OK
     ]
-    assert {r.site for r in results} == {"theflip_museum", "theflip_museum_visit", "apple_maps"}
+    assert {r.site for r in results} == {
+        "theflip_museum",
+        "theflip_museum_visit",
+        "apple_maps",
+        "google_maps",
+    }
     assert any(r.name == "weekly-repair-day" for r in results)
     assert any(r.name == "expired_events" for r in results)
     assert exit_code(results) == EXIT_OK

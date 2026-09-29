@@ -46,6 +46,10 @@ ALERT_AFTER_FAILURES: int = config("WEBWATCH_ALERT_AFTER_FAILURES", default=2, c
 #: A check must be healthy this many consecutive runs before a fired alert clears.
 RECOVER_AFTER_SUCCESSES: int = config("WEBWATCH_RECOVER_AFTER_SUCCESSES", default=1, cast=int)
 
+# --- Google Places API (the google_maps source) ---
+#: Sent only in a request header, never in a URL. Unset -> google_maps reports FETCH_ERROR.
+GOOGLE_PLACES_API_KEY: str = config("WEBWATCH_GOOGLE_PLACES_API_KEY", default="")
+
 # --- Email notification (transactional SMTP) ---
 
 #: When true, emails are printed instead of sent. Defaults to true so nothing is

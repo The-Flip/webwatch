@@ -22,6 +22,7 @@ The `conftest.py` helpers — `load_fixture(name)`, `serve_html(html)`, and `mak
 - Commit **one** real HTML snapshot per source under `tests/fixtures/` (dated, e.g. `theflip_museum_2026-06-23.html`). This is the page as it actually looked.
 - Refresh it with `scripts/capture_fixture.py` (manual, network-using; never run in `make test`). Re-capturing after a site change is how we _notice_ the change — the extractor tests then show what broke.
 - **Do not commit separate "broken" fixtures.** Derive negative cases by mutating the golden HTML in-memory. This avoids fixture bloat and dual-maintenance.
+- An **API-backed source**'s golden fixture is the real JSON response (e.g. `google_maps_2026-09-28.json`), captured with `scripts/capture_fixture.py --source <name>` so the request carries that source's headers and key. Mutate it with `copy.deepcopy` and dict edits instead of BeautifulSoup. See `tests/test_google_maps.py`.
 
 ## Prove every status by mutation
 

@@ -22,6 +22,69 @@ def test_fetch_returns_text_and_sends_user_agent() -> None:
     assert "webwatch" in seen["ua"]
 
 
+def test_fetch_sends_extra_headers_alongside_user_agent() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.headers)
+        return httpx.Response(200, json={"ok": True})
+
+    fetch(
+        "https://api.example.test/",
+        headers={"X-Api-Key": "k"},
+        transport=httpx.MockTransport(handler),
+    )
+    assert seen["x-api-key"] == "k"
+    assert "webwatch" in seen["user-agent"]
+
+
+def test_json_error_body_is_summarized_in_fetch_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"error": {"status": "PERMISSION_DENIED"}})
+
+    with pytest.raises(FetchError, match=r"HTTP 403.*PERMISSION_DENIED"):
+        fetch("https://api.example.test/", transport=httpx.MockTransport(handler))
+
+
+def test_html_error_body_is_not_included_in_fetch_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, html="<html><body>Some long error page</body></html>")
+
+    with pytest.raises(FetchError) as excinfo:
+        fetch("https://example.test/", transport=httpx.MockTransport(handler))
+    assert str(excinfo.value).endswith("returned HTTP 404")
+
+
+def test_retry_exhaustion_keeps_the_last_error_reason() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+
+    with pytest.raises(FetchError, match=r"after 2 attempt.*HTTP 429.*RESOURCE_EXHAUSTED"):
+        fetch(
+            "https://api.example.test/",
+            transport=httpx.MockTransport(handler),
+            max_retries=1,
+            sleep=lambda _s: None,
+        )
+
+
+def test_json_response_is_never_treated_as_a_challenge_page() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"error": {"message": "Access denied. Just a moment..."}})
+
+    with pytest.raises(FetchError, match="HTTP 403"):
+        fetch("https://api.example.test/", transport=httpx.MockTransport(handler))
+
+
+def test_long_error_body_is_truncated() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text="x" * 5000)
+
+    with pytest.raises(FetchError) as excinfo:
+        fetch("https://api.example.test/", transport=httpx.MockTransport(handler))
+    assert len(str(excinfo.value)) < 300
+
+
 def test_fetch_retries_transient_then_succeeds() -> None:
     calls = {"n": 0}
     slept: list[float] = []

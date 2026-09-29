@@ -8,7 +8,7 @@ not a false alarm.
 from __future__ import annotations
 
 from webwatch import normalize
-from webwatch.checks.base import check_field
+from webwatch.checks.base import AnyOf, check_field
 from webwatch.result import CheckStatus
 from webwatch.sources.base import Observed
 
@@ -103,3 +103,33 @@ def test_visible_mismatch_wins_over_structured() -> None:
         structured="The Flip",  # metadata happens to be right
     )
     assert result.status is CheckStatus.MISMATCH
+
+
+# --- AnyOf: several accepted values -------------------------------------------------
+
+
+def test_any_of_matches_an_alternative_value() -> None:
+    expected = AnyOf(("The Flip", "The Flip: Chicago's Playable Pinball Museum"))
+    observed = Observed.found("the flip: chicago's playable pinball museum")
+    result = check_field("s", "name", observed, expected, normalizer=normalize.text)
+    assert result.status is CheckStatus.OK
+
+
+def test_any_of_mismatch_reports_every_accepted_value() -> None:
+    expected = AnyOf(("The Flip", "The Flip Museum"))
+    result = check_field(
+        "s", "name", Observed.found("Flip Side"), expected, normalizer=normalize.text
+    )
+    assert result.status is CheckStatus.MISMATCH
+    assert result.expected == ["The Flip", "The Flip Museum"]
+
+
+def test_any_of_ignores_blank_values() -> None:
+    result = check_field("s", "name", Observed.found("The Flip"), AnyOf(("", "The Flip")))
+    assert result.status is CheckStatus.OK
+    assert result.expected == "The Flip"
+
+
+def test_any_of_all_blank_is_skipped() -> None:
+    result = check_field("s", "name", Observed.found("The Flip"), AnyOf(("", "")))
+    assert result.status is CheckStatus.SKIPPED

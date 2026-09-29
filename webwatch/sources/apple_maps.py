@@ -39,10 +39,9 @@ from urllib.parse import parse_qs, urlsplit
 from bs4 import BeautifulSoup, Tag
 
 from webwatch import normalize
-from webwatch.checks.registry import Check, hours_checks
+from webwatch.checks.registry import HOURS_FIELDS, Check, hours_checks, listing_name
 from webwatch.sources.base import Observation, Observed, Source
 
-_HOURS_FIELDS = tuple(f"hours.{day}" for day in normalize.WEEKDAYS)
 _SECONDS_PER_DAY = 24 * 60 * 60
 
 # Apple's payload vocabulary.
@@ -158,7 +157,7 @@ def _weekly_hours(entries: object) -> dict[str, str] | None:
                 if not isinstance(start, int) or not isinstance(end, int):
                     return None
                 windows[key].append(f"{_clock(start)} - {_clock(end)}")
-    return {day: ", ".join(spans) if spans else "closed" for day, spans in windows.items()}
+    return normalize.week_hours(windows)
 
 
 # --- the visible page -------------------------------------------------------------
@@ -219,7 +218,7 @@ def _phone(soup: BeautifulSoup) -> Observed[str]:
 def _hours(soup: BeautifulSoup) -> dict[str, Observed[str]]:
     """Each weekday's visible hours; a day no row covers stays ``missing``."""
     fields: dict[str, Observed[str]] = {
-        field: Observed.missing("hours block or this day not found") for field in _HOURS_FIELDS
+        field: Observed.missing("hours block or this day not found") for field in HOURS_FIELDS
     }
     # The today-only summary has no rows; the full-week block does.
     blocks = [cell for cell in _cells(soup, "Hours") if cell.select(".sc-hours-row")]
@@ -245,14 +244,15 @@ def _regular_hours(soup: BeautifulSoup, hours_type: str | None) -> dict[str, Obs
     """
     if hours_type is not None and hours_type != _REGULAR_HOURS:
         note = f"Apple is showing non-regular hours (hoursType={hours_type!r})"
-        return {field: Observed.missing(note) for field in _HOURS_FIELDS}
+        return {field: Observed.missing(note) for field in HOURS_FIELDS}
     return _hours(soup)
 
 
 class AppleMaps(Source):
     name = "apple_maps"
+    label = "Apple Maps"
     url = "https://maps.apple.com/place?place-id=I807CC9ABBE1179A2"
-    tracks = frozenset({"name", "url", "phone", *_HOURS_FIELDS})
+    tracks = frozenset({"name", "url", "phone", *HOURS_FIELDS})
 
     def observe(self, html: str) -> Observation:
         soup = BeautifulSoup(html, "lxml")
@@ -282,7 +282,7 @@ class AppleMaps(Source):
 SOURCE = AppleMaps()
 
 CHECKS = [
-    Check("name", lambda f: f.organization.name, normalize.text, structured_field="name"),
+    Check("name", listing_name, normalize.text, structured_field="name"),
     Check(
         "url",
         lambda f: f.organization.url,

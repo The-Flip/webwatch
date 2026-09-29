@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from webwatch import normalize
-from webwatch.checks.base import ABSENT, Normalizer, _as_text, check_field
+from webwatch.checks.base import ABSENT, AnyOf, Normalizer, _as_text, check_field
 from webwatch.facts import Facts
 from webwatch.result import CheckResult, CheckStatus
 from webwatch.sources.base import Observation
@@ -44,6 +44,15 @@ class Check:
             normalizer=self.normalizer,
             structured=structured,
         )
+
+
+def listing_name(facts: Facts) -> AnyOf:
+    """The names a listing site may show: the canonical name or an accepted alternative."""
+    return AnyOf((facts.organization.name, *facts.organization.listing_names))
+
+
+#: The seven per-weekday hours fields, in weekday order.
+HOURS_FIELDS = tuple(f"hours.{day}" for day in normalize.WEEKDAYS)
 
 
 def _hours_getter(day: str) -> Callable[[Facts], Any]:

@@ -24,6 +24,8 @@ from webwatch.result import CheckResult
 from webwatch.sources import registry as sources_registry
 from webwatch.sources.apple_maps import CHECKS as APPLE_MAPS_CHECKS
 from webwatch.sources.apple_maps import SOURCE as APPLE_MAPS_SOURCE
+from webwatch.sources.google_maps import CHECKS as GOOGLE_MAPS_CHECKS
+from webwatch.sources.google_maps import SOURCE as GOOGLE_MAPS_SOURCE
 from webwatch.sources.theflip_museum import CHECKS as THEFLIP_CHECKS
 from webwatch.sources.theflip_museum import SOURCE as THEFLIP_SOURCE
 from webwatch.sources.theflip_museum_visit import CHECKS as VISIT_CHECKS
@@ -35,6 +37,7 @@ _BUILTINS = [
     (THEFLIP_SOURCE, THEFLIP_CHECKS),
     (VISIT_SOURCE, VISIT_CHECKS),
     (APPLE_MAPS_SOURCE, APPLE_MAPS_CHECKS),
+    (GOOGLE_MAPS_SOURCE, GOOGLE_MAPS_CHECKS),
 ]
 
 

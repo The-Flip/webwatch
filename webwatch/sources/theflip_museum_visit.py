@@ -58,6 +58,7 @@ def _row_pairs(card: Tag) -> list[tuple[str, str]]:
 
 class TheFlipMuseumVisit(Source):
     name = "theflip_museum_visit"
+    label = "Visit page"
     url = "https://www.theflip.museum/visit"
     tracks = frozenset(f"hours.{day}" for day in normalize.WEEKDAYS)
     provides_events = True

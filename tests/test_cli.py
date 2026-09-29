@@ -204,6 +204,23 @@ def test_digest_all_clear_when_nothing_alerting(monkeypatch: pytest.MonkeyPatch,
     assert "all clear" in result.output
 
 
+def test_digest_shows_check_by_site_table(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _seed_state(
+        monkeypatch,
+        tmp_path,
+        {
+            "apple_maps\tname": CheckState(status="ok"),
+            "google_maps\thours.monday": CheckState(status="mismatch", alerting=True),
+        },
+    )
+    result = CliRunner().invoke(cli, ["digest"])
+    assert result.exit_code == 0
+    assert "Apple Maps" in result.output and "Google Maps" in result.output  # source labels
+    assert any(
+        line.split()[:1] == ["hours"] and "MISMATCH" in line for line in result.output.splitlines()
+    )
+
+
 def test_digest_only_problems_suppresses_all_clear(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:

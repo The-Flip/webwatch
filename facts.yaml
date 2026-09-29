@@ -25,6 +25,16 @@ organization:
   phone: '312-999-0153'
   email: 'hello@theflip.museum'
 
+  # Whether the museum is open for business at all, as listing sites report it
+  # (Google: OPERATIONAL / CLOSED_TEMPORARILY / CLOSED_PERMANENTLY). Change this if
+  # the museum ever closes temporarily, so listings saying so aren't flagged.
+  business_status: 'operational'
+
+  # Other names listing sites (Apple/Google Maps) may show for the museum, e.g. a
+  # longer descriptive name on Google. Each is matched exactly (case/space-insensitive).
+  listing_names:
+    - "The Flip: Chicago's Playable Pinball Museum"
+
   hours:
     monday: '10:00 - 20:00'
     tuesday: '10:00 - 20:00'

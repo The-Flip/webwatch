@@ -37,6 +37,10 @@ class Organization:
     address: Address = field(default_factory=Address)
     phone: str = ""
     email: str = ""
+    #: other names listing sites may legitimately show (e.g. a longer descriptive name)
+    listing_names: tuple[str, ...] = ()
+    #: whether the business is open at all, as listings report it (e.g. "operational")
+    business_status: str = ""
     #: weekday name -> raw hours value ("closed", a window dict, or a list of them)
     hours: dict[str, Any] = field(default_factory=dict)
 
@@ -90,14 +94,29 @@ def _parse_address(data: Any) -> Address:
     )
 
 
+def _parse_listing_names(data: Any) -> tuple[str, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list) or not all(isinstance(n, str) for n in data):
+        raise FactsError("organization.listing_names must be a list of strings")
+    return tuple(data)
+
+
 def _parse_organization(data: Any) -> Organization:
     mapping = _require_mapping(data, "organization")
+    listing_names = _parse_listing_names(mapping.get("listing_names"))
+    # Alternatives to a blank name would let a listing's name check pass (and
+    # un-gate its other checks) on an alternative alone, hiding the missing name.
+    if listing_names and is_blank(mapping.get("name")):
+        raise FactsError("organization.listing_names requires organization.name to be set")
     return Organization(
         name=str(mapping.get("name", "")),
         url=str(mapping.get("url", "")),
         address=_parse_address(mapping.get("address")),
         phone=str(mapping.get("phone", "")),
         email=str(mapping.get("email", "")),
+        business_status=str(mapping.get("business_status", "")),
+        listing_names=listing_names,
         hours=_require_mapping(mapping.get("hours"), "organization.hours"),
     )
 
