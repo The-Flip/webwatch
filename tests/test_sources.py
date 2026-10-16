@@ -106,3 +106,11 @@ def test_mutation_changed_value_is_mismatch() -> None:
     obs = FakeSource().observe(str(soup))
     result = check_field("fake_museum", "name", obs.get("name"), expected="The Flip")
     assert result.status is CheckStatus.MISMATCH
+
+
+def test_accepting_statuses_requires_observe_not_found() -> None:
+    """A source can't accept a 404 without saying what it means (fails at definition)."""
+    with pytest.raises(TypeError, match="observe_not_found"):
+
+        class _Forgetful(FakeSource):
+            accept_statuses = frozenset({404})

@@ -23,6 +23,8 @@ webwatch/                   # repo root (distribution & command are named "webwa
 │   │   ├── registry.py     #   registry of sources
 │   │   ├── theflip_museum.py
 │   │   ├── theflip_museum_visit.py
+│   │   ├── theflip_museum_donate.py  #   where the donate button links
+│   │   ├── square_donation.py        #   whether that Square checkout is live
 │   │   ├── apple_maps.py
 │   │   └── google_maps.py  #   via the Places API (key from config)
 │   ├── checks/             # Assertions over an Observation

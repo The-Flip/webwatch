@@ -105,3 +105,13 @@ def test_listing_names_must_be_a_list_of_strings(bad: object) -> None:
 def test_listing_names_require_a_name() -> None:
     with pytest.raises(FactsError, match=r"requires organization\.name"):
         parse_facts({"organization": {"name": "", "listing_names": ["The Flip Museum"]}})
+
+
+def test_donation_url_parses() -> None:
+    url = "https://checkout.square.site/merchant/M/checkout/L"
+    parsed = parse_facts({"organization": {"donation_url": url}})
+    assert parsed.organization.donation_url == url
+
+
+def test_donation_url_defaults_to_blank() -> None:
+    assert is_blank(parse_facts({"organization": {}}).organization.donation_url)

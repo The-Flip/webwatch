@@ -6,6 +6,9 @@ politeness delay, and — crucially — *honest* failure classification:
 
 - a network/HTTP error that persists after retries raises :class:`FetchError`
   (the caller maps it to ``CheckStatus.FETCH_ERROR``);
+- a status the caller lists in ``accept_statuses`` (e.g. a 404 for a source whose
+  fact *is* "this URL exists") is returned, not raised, so it can be read as an
+  answer rather than misreported as a fetch failure;
 - a response that is actually a CAPTCHA/challenge/login wall/empty-JS shell is
   detected by :func:`looks_blocked` **on any status code** (Cloudflare often uses
   ``403``/``503``) and returned as a :class:`FetchResult` with ``blocked`` set, so
@@ -144,6 +147,7 @@ def fetch(
     max_retries: int | None = None,
     backoff_base: float = 0.5,
     sleep: Callable[[float], None] = time.sleep,
+    accept_statuses: frozenset[int] = frozenset(),
 ) -> FetchResult:
     """Fetch ``url`` and return a :class:`FetchResult`.
 
@@ -151,7 +155,9 @@ def fetch(
     ``max_retries`` times, then raises :class:`FetchError`. A block/challenge is
     returned (not raised) with ``blocked=True``. ``headers`` are sent in addition to
     (and may override) the User-Agent — e.g. an API key, which belongs in a header
-    and never in ``url``, so it can't leak into error messages.
+    and never in ``url``, so it can't leak into error messages. A non-retryable
+    status in ``accept_statuses`` is returned like a success (block detection still
+    runs first, so a challenge served as a 404 stays ``blocked``).
     """
     retries = config.HTTP_MAX_RETRIES if max_retries is None else max_retries
     if throttle is not None:
@@ -184,7 +190,7 @@ def fetch(
                         block_reason=reason,
                     )
                 if response.status_code not in _RETRYABLE:
-                    if response.is_success:
+                    if response.is_success or response.status_code in accept_statuses:
                         return FetchResult(
                             url=str(response.url),
                             status_code=response.status_code,

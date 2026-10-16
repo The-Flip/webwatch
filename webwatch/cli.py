@@ -101,6 +101,7 @@ def facts(validate: bool) -> None:
         f"  address: {org.address.street}, {org.address.city}, {org.address.region} {org.address.postal_code}"
     )
     click.echo(f"  phone: {org.phone or '(unset)'}    email: {org.email or '(unset)'}")
+    click.echo(f"  donation_url: {org.donation_url or '(unset)'}")
     click.echo(f"Rules: {len(loaded.rules)}")
     for rule in loaded.rules:
         state = "enabled" if rule.enabled else "disabled"
