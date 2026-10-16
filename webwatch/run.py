@@ -26,8 +26,12 @@ from webwatch.sources.apple_maps import CHECKS as APPLE_MAPS_CHECKS
 from webwatch.sources.apple_maps import SOURCE as APPLE_MAPS_SOURCE
 from webwatch.sources.google_maps import CHECKS as GOOGLE_MAPS_CHECKS
 from webwatch.sources.google_maps import SOURCE as GOOGLE_MAPS_SOURCE
+from webwatch.sources.square_donation import CHECKS as SQUARE_DONATION_CHECKS
+from webwatch.sources.square_donation import SOURCE as SQUARE_DONATION_SOURCE
 from webwatch.sources.theflip_museum import CHECKS as THEFLIP_CHECKS
 from webwatch.sources.theflip_museum import SOURCE as THEFLIP_SOURCE
+from webwatch.sources.theflip_museum_donate import CHECKS as DONATE_CHECKS
+from webwatch.sources.theflip_museum_donate import SOURCE as DONATE_SOURCE
 from webwatch.sources.theflip_museum_visit import CHECKS as VISIT_CHECKS
 from webwatch.sources.theflip_museum_visit import SOURCE as VISIT_SOURCE
 
@@ -36,6 +40,8 @@ _EXPIRED_EVENTS = "expired_events"
 _BUILTINS = [
     (THEFLIP_SOURCE, THEFLIP_CHECKS),
     (VISIT_SOURCE, VISIT_CHECKS),
+    (DONATE_SOURCE, DONATE_CHECKS),
+    (SQUARE_DONATION_SOURCE, SQUARE_DONATION_CHECKS),
     (APPLE_MAPS_SOURCE, APPLE_MAPS_CHECKS),
     (GOOGLE_MAPS_SOURCE, GOOGLE_MAPS_CHECKS),
 ]

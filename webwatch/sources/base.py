@@ -115,10 +115,36 @@ class Source(ABC):
     tracks: frozenset[str]
     #: Whether this source reads an events list (so the run evaluates rules against it).
     provides_events: bool = False
+    #: Non-2xx statuses that are an *answer* about this page rather than a fetch failure
+    #: (e.g. 404 for a source whose fact is "this URL exists"); such a source must
+    #: override :meth:`observe_not_found` to say what the answer means.
+    accept_statuses: frozenset[int] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if cls.accept_statuses and cls.observe_not_found is Source.observe_not_found:
+            raise TypeError(
+                f"{cls.__name__} sets accept_statuses but doesn't override observe_not_found"
+            )
 
     @abstractmethod
     def observe(self, html: str) -> Observation:
         """Parse ``html`` into an :class:`Observation`. Pure: no I/O."""
+
+    def observe_result(self, result: FetchResult) -> Observation:
+        """Observe a fetched (unblocked) page: an accepted non-2xx status goes to
+        :meth:`observe_not_found`, anything else to the pure :meth:`observe`."""
+        if result.status_code in self.accept_statuses:
+            return self.observe_not_found(result)
+        return self.observe(result.text)
+
+    def observe_not_found(self, result: FetchResult) -> Observation:
+        """Read a response whose status is in :attr:`accept_statuses`. Pure: no I/O.
+
+        Only sources that set ``accept_statuses`` implement it (enforced when the
+        subclass is defined), so an accepted 404 can never fall through to ``observe``.
+        """
+        raise NotImplementedError(f"{self.name} does not accept non-2xx statuses")
 
     def blocked_observation(self, note: str) -> Observation:
         """Every tracked field as ``BLOCKED`` — used when the fetch hit a challenge."""
@@ -148,7 +174,12 @@ class Source(ABC):
         raises :class:`~webwatch.fetch.FetchError` for the caller to map to
         ``FETCH_ERROR`` (so one failure doesn't masquerade as many).
         """
-        result: FetchResult = fetch(self.url, headers=self.request_headers(), transport=transport)
+        result: FetchResult = fetch(
+            self.url,
+            headers=self.request_headers(),
+            transport=transport,
+            accept_statuses=self.accept_statuses,
+        )
         if result.blocked:
             return self.blocked_observation(result.block_reason or "blocked")
-        return self.observe(result.text)
+        return self.observe_result(result)

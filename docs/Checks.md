@@ -40,6 +40,16 @@ A listing page can quietly turn into a page about a different business: listings
 
 Listing sites often embed their own place data as JSON (Apple's `shell-props`). Treat it as `structured` corroboration, exactly like JSON-LD: the visible value decides, and a stale payload is `METADATA_DRIFT`. Parse it defensively. If it has an unexpected shape, the result is "no corroboration", never a crash.
 
+## Link-validity sources (a 404 is the answer)
+
+Normally an HTTP 404 means we're fetching the wrong URL, so `fetch()` raises and the run reports `FETCH_ERROR`. Apple Maps works this way, where an unknown place-id is our mistake. Some sources exist to answer "does this URL still exist?", such as the Square donation link (`webwatch/sources/square_donation.py`). For those sources, a 404 is the finding, and reporting it as "couldn't fetch" would send triage the wrong way. Such a source:
+
+- sets `accept_statuses = frozenset({404, 410})`, so `fetch()` returns those responses instead of raising. Block detection still runs first, so a challenge served as a 404 is still `BLOCKED`, and 5xx/network errors still retry and end as `FETCH_ERROR`;
+- overrides `observe_not_found(result)` to read an accepted status. Defining a source that sets `accept_statuses` without this override raises `TypeError`, so an accepted 404 can never fall through to `observe`. Every other response goes to the usual pure `observe(html)`.
+- reports the "gone" value (e.g. `"not found (HTTP 404)"` → `MISMATCH`) only when the body is the site's own not-found page. A bare 404 with an unrecognized body (CDN or routing glitch) is `missing` → `STRUCTURE_CHANGED`.
+
+Use this only when the URL's existence is the fact being checked. Test the 404 path with an in-memory response: `capture_fixture.py` deliberately won't save a non-2xx page as a golden fixture.
+
 ## API-backed sources
 
 When a site only renders with JavaScript, use its official API if it has one (Google Maps → Places API). Override `request_headers()` to send the credential, and raise `FetchError` if it isn't configured. Capture a real response with `scripts/capture_fixture.py --source <name>`. See [Extraction.md](Extraction.md#blocked-and-js-rendered-pages) for how the status mapping carries over.

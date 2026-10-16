@@ -30,6 +30,12 @@ organization:
   # the museum ever closes temporarily, so listings saying so aren't flagged.
   business_status: 'operational'
 
+  # The online checkout the "Donate Now" button on theflip.museum/donate should link
+  # to. webwatch checks both that the page links here and that this Square link is
+  # still live. If you replace the Square link, change it here AND in
+  # webwatch/sources/square_donation.py (a test keeps the two in step).
+  donation_url: 'https://checkout.square.site/merchant/ML3SPVMTSCZBA/checkout/C3TD5MW7HG3FIIATNS4GALNL'
+
   # Other names listing sites (Apple/Google Maps) may show for the museum, e.g. a
   # longer descriptive name on Google. Each is matched exactly (case/space-insensitive).
   listing_names:

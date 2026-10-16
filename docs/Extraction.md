@@ -23,9 +23,11 @@ Defined in [`webwatch/result.py`](../webwatch/result.py). Every check returns ex
 | `STRUCTURE_CHANGED` | Region could not be located, or strategies disagreed              | exit 2 (checker) |
 | `PARSE_ERROR`       | Region located, but value un-modelable into the canonical type    | exit 2 (checker) |
 | `BLOCKED`           | CAPTCHA / challenge / login wall / bot block / empty JS shell     | exit 2 (checker) |
-| `FETCH_ERROR`       | Could not fetch the page (network/HTTP, after retries)            | exit 2 (checker) |
+| `FETCH_ERROR`       | Could not fetch the page (network/HTTP, after retries)\*          | exit 2 (checker) |
 | `METADATA_DRIFT`    | Visible value is correct, but structured metadata (JSON-LD) stale | exit 2 (checker) |
 | `SKIPPED`           | Disabled, not applicable, or a field the source never publishes   | exit 0           |
+
+\* Except a 404/410 on a source that opts in via `accept_statuses`; see [When a 404 is a finding](#when-a-404-is-a-finding).
 
 **`MISMATCH` is the only status that asserts the world is wrong.** Produce it only when a value was genuinely located and read. If you are tempted to return `MISMATCH` because an element was missing or empty, you want `STRUCTURE_CHANGED`.
 
@@ -62,6 +64,10 @@ Compare through [`webwatch/normalize.py`](../webwatch/normalize.py), never with 
 - The API's JSON _is_ the observation, so there's no visible/structured split and no `METADATA_DRIFT`.
 - A requested field the response leaves out is `missing` → `STRUCTURE_CHANGED`, never a synthetic "not listed" `MISMATCH`.
 - A credential goes in a header, never the URL, so it can't leak into errors. A missing credential raises `FetchError` → `FETCH_ERROR`. It must never be `SKIPPED`, which counts as healthy and would quietly clear an alert.
+
+### When a 404 is a finding
+
+A non-2xx response is normally `FETCH_ERROR`. The exception is a source whose fact _is_ "this URL exists" (a donation checkout link). There, the server's 404 is an authoritative answer, not a failure to read, so the source opts in with `Source.accept_statuses` and reports it as a `MISMATCH`. See [Checks.md](Checks.md#link-validity-sources-a-404-is-the-answer). Don't use this to turn a fetch failure into a verdict anywhere else.
 
 ## Breakage detection
 
