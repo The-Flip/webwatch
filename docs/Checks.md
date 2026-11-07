@@ -46,7 +46,7 @@ Normally an HTTP 404 means we're fetching the wrong URL, so `fetch()` raises and
 
 - sets `accept_statuses = frozenset({404, 410})`, so `fetch()` returns those responses instead of raising. Block detection still runs first, so a challenge served as a 404 is still `BLOCKED`, and 5xx/network errors still retry and end as `FETCH_ERROR`;
 - overrides `observe_not_found(result)` to read an accepted status. Defining a source that sets `accept_statuses` without this override raises `TypeError`, so an accepted 404 can never fall through to `observe`. Every other response goes to the usual pure `observe(html)`.
-- reports the "gone" value (e.g. `"not found (HTTP 404)"` → `MISMATCH`) only when the body is the site's own not-found page. A bare 404 with an unrecognized body (CDN or routing glitch) is `missing` → `STRUCTURE_CHANGED`.
+- reports the "gone" value (e.g. `"not found (HTTP 404)"` → `MISMATCH`) only when the body is the site's own not-found page and the final URL is still the monitored one. A bare 404 with an unrecognized body (CDN or routing glitch), or a not-found page reached by redirecting somewhere else, is `missing` → `STRUCTURE_CHANGED`.
 
 Use this only when the URL's existence is the fact being checked. Test the 404 path with an in-memory response: `capture_fixture.py` deliberately won't save a non-2xx page as a golden fixture.
 

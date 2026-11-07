@@ -67,7 +67,7 @@ Compare through [`webwatch/normalize.py`](../webwatch/normalize.py), never with 
 
 ### When a 404 is a finding
 
-A non-2xx response is normally `FETCH_ERROR`. The exception is a source whose fact _is_ "this URL exists" (a donation checkout link). There, the server's 404 is an authoritative answer, not a failure to read, so the source opts in with `Source.accept_statuses` and reports it as a `MISMATCH`. See [Checks.md](Checks.md#link-validity-sources-a-404-is-the-answer). Don't use this to turn a fetch failure into a verdict anywhere else.
+A non-2xx response is normally `FETCH_ERROR`. The exception is a source whose fact _is_ "this URL exists" (a donation checkout link). There, the server's 404 is an authoritative answer, not a failure to read, so the source opts in with `Source.accept_statuses`. It reports a `MISMATCH` only for the site's own not-found page at the monitored URL; any other 404 stays `STRUCTURE_CHANGED`, because it doesn't prove the link is gone. See [Checks.md](Checks.md#link-validity-sources-a-404-is-the-answer). Don't use this to turn a fetch failure into a verdict anywhere else.
 
 ## Breakage detection
 

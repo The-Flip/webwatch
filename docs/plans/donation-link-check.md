@@ -257,6 +257,17 @@ The pre-PR review agents raised these, and they were addressed during implementa
   `ValueError` on it, which would have crashed the donate source.
 - **Readability:** the flags are now a `_Flag` NamedTuple, and `_link_status` is private.
 
+CodeRabbit raised these on PR #3, and all four were fixed:
+
+- **A 404 must come from the monitored URL.** `fetch()` follows redirects, so a redirect to another
+  checkout's not-found page was a false `MISMATCH`. `observe_not_found` now compares the final URL
+  with the monitored IDs. Square serves an unknown checkout's 404 at the requested URL with no
+  redirect (checked live on 2026-11-07), so a real deletion still reports `MISMATCH`.
+- **`checkoutLink.id` is part of the identity guard.** The flags are read from that object, so a
+  different or absent ID is now `STRUCTURE_CHANGED`, not a possible false `OK`.
+- **`checkout_ids` rejects non-HTTPS URLs,** as its docstring and `docs/Facts.md` already promised.
+- **`docs/Extraction.md` now states the conditions** for reporting a 404 as a `MISMATCH`.
+
 Declined, with reasons:
 
 - **An off-site "Donate" link that isn't Square could produce a `MISMATCH`.** That's intended. The

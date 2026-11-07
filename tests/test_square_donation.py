@@ -71,6 +71,17 @@ def _fetch_status(status_code: int, body: str = SQUARE_NOT_FOUND) -> CheckStatus
     return _check(SOURCE.fetch(transport=transport)).status
 
 
+def _not_found_after_redirect_to(target: str) -> CheckStatus:
+    """The status when the monitored URL redirects to Square's not-found page at ``target``."""
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == SOURCE.url:
+            return httpx.Response(302, headers={"location": target})
+        return httpx.Response(404, html=SQUARE_NOT_FOUND)
+
+    return _check(SOURCE.fetch(transport=httpx.MockTransport(respond))).status
+
+
 # --- against the real fixture -------------------------------------------------
 
 
@@ -86,6 +97,11 @@ def test_source_monitors_the_facts_donation_url() -> None:
 def test_checkout_ids_reject_a_short_link() -> None:
     with pytest.raises(ValueError, match="checkout"):
         checkout_ids("https://square.link/u/zHuPuFSr")
+
+
+def test_checkout_ids_reject_a_non_https_url() -> None:
+    with pytest.raises(ValueError, match="checkout"):
+        checkout_ids(SOURCE.url.replace("https://", "http://"))
 
 
 # --- the link is not live -> MISMATCH -----------------------------------------
@@ -129,6 +145,23 @@ def test_link_not_found_is_mismatch(status_code: int) -> None:
 def test_404_without_squares_not_found_page_is_structure_changed() -> None:
     """A bare 404 (CDN/routing glitch, path change) is not proof the link was deleted."""
     assert _fetch_status(404, "<html><body>404</body></html>") is CheckStatus.STRUCTURE_CHANGED
+
+
+def test_not_found_after_a_redirect_to_the_same_checkout_is_mismatch() -> None:
+    assert _not_found_after_redirect_to(f"{SOURCE.url}/") is CheckStatus.MISMATCH
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://checkout.square.site/merchant/ML3SPVMTSCZBA/checkout/SOMEONEELSE",
+        "https://checkout.square.site/not-found",
+    ],
+    ids=["another-checkout", "landing-page"],
+)
+def test_not_found_page_at_another_url_is_structure_changed(target: str) -> None:
+    """Identity guard: a 404 for a different URL says nothing about the monitored link."""
+    assert _not_found_after_redirect_to(target) is CheckStatus.STRUCTURE_CHANGED
 
 
 # --- couldn't read the status -> STRUCTURE_CHANGED / PARSE_ERROR ---------------
@@ -176,6 +209,20 @@ def test_page_for_another_checkout_is_structure_changed(key: str) -> None:
     """Identity guard: a different checkout's state is never asserted as ours."""
     html = _with_bootstrap(lambda p: p.update({key: "SOMEONEELSE"}))
     assert _status(html) is CheckStatus.STRUCTURE_CHANGED
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [lambda link: link.update(id="SOMEONEELSE"), lambda link: link.pop("id")],
+    ids=["different-id", "no-id"],
+)
+def test_checkout_object_for_another_link_is_structure_changed(
+    mutate: Callable[[dict[str, Any]], Any],
+) -> None:
+    """Identity guard: the flags are read from this object, so it must be ours too."""
+    assert _status(_with_bootstrap(lambda p: mutate(p["checkoutLink"]))) is (
+        CheckStatus.STRUCTURE_CHANGED
+    )
 
 
 # --- fetch paths ---------------------------------------------------------------

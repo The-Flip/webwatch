@@ -18,9 +18,10 @@ A flag that's present and unhealthy is the answer, even if the others are absent
 Otherwise a non-bool flag is ``unparseable`` (``PARSE_ERROR``), an absent one is
 ``missing`` (``STRUCTURE_CHANGED``), and only all three healthy is ``"active"``.
 
-Identity: the payload's ``merchantId`` and ``checkoutLinkId`` must equal the IDs in
-:attr:`SquareDonation.url`. Anything else (say a redirect to another checkout or to a
-landing page) is ``missing``, never a verdict about someone else's link.
+Identity: the payload's ``merchantId``, ``checkoutLinkId`` and ``checkoutLink.id`` must
+equal the IDs in :attr:`SquareDonation.url`, and a 404 must come from that same checkout
+URL. Anything else (say a redirect to another checkout or to a landing page) is
+``missing``, never a verdict about someone else's link.
 
 A deleted link is an HTTP 404, and that 404 *is* the finding we're watching for, so
 this source accepts 404/410 (see ``Source.accept_statuses``) and reports
@@ -68,7 +69,7 @@ def checkout_ids(url: str) -> tuple[str, str]:
     """
     parts = urlsplit(url)
     match = _CHECKOUT_PATH.match(parts.path)
-    if parts.hostname != _CHECKOUT_HOST or match is None:
+    if parts.scheme != "https" or parts.hostname != _CHECKOUT_HOST or match is None:
         raise ValueError(f"not a canonical Square checkout URL: {url!r}")
     return match["merchant"], match["link"]
 
@@ -152,25 +153,37 @@ class SquareDonation(Source):
         self._merchant_id, self._link_id = checkout_ids(self.url)
 
     def observe_not_found(self, result: FetchResult) -> Observation:
-        visible = _loose(BeautifulSoup(result.text, "lxml").get_text(" ", strip=True))
-        if _SQUARE_NOT_FOUND in visible:
-            status: Observed[str] = Observed.found(f"not found (HTTP {result.status_code})")
-        else:
-            status = Observed.missing(
-                f"HTTP {result.status_code} without Square's not-found page; "
-                "can't tell whether the link was deleted"
-            )
-        return Observation(self.site, {_FIELD: status})
+        return Observation(self.site, {_FIELD: self._not_found_status(result)})
 
     def observe(self, html: str) -> Observation:
         return Observation(self.site, {_FIELD: self._status(html)})
+
+    def _is_monitored_url(self, url: str) -> bool:
+        try:
+            return checkout_ids(url) == (self._merchant_id, self._link_id)
+        except ValueError:
+            return False
+
+    def _not_found_status(self, result: FetchResult) -> Observed[str]:
+        if not self._is_monitored_url(result.url):
+            return Observed.missing(
+                f"HTTP {result.status_code} from {result.url}, not the checkout monitored"
+            )
+        visible = _loose(BeautifulSoup(result.text, "lxml").get_text(" ", strip=True))
+        if _SQUARE_NOT_FOUND not in visible:
+            return Observed.missing(
+                f"HTTP {result.status_code} without Square's not-found page; "
+                "can't tell whether the link was deleted"
+            )
+        return Observed.found(f"not found (HTTP {result.status_code})")
 
     def _status(self, html: str) -> Observed[str]:
         payload = _bootstrap(html)
         if payload is None:
             return Observed.missing("no readable window.bootstrap payload on the checkout page")
-        ids = (payload.get("merchantId"), payload.get("checkoutLinkId"))
-        if ids != (self._merchant_id, self._link_id):
+        link = _as_mapping(payload.get("checkoutLink"))
+        ids = (payload.get("merchantId"), payload.get("checkoutLinkId"), link.get("id"))
+        if ids != (self._merchant_id, self._link_id, self._link_id):
             return Observed.missing(f"page is for checkout {ids}, not the one monitored")
         return _link_status(payload)
 
