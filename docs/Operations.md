@@ -93,11 +93,16 @@ sending it:
 
 ```cron
 # Daily at 7am: run checks, update state, email on any change.
-0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
+0 7 * * *  cd /path/to/webwatch && /path/to/mise exec -- uv run webwatch notify >> /var/log/webwatch.log 2>&1
 
 # Monday at 8am: email a standing summary of anything still open (no re-scrape).
-0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
+0 8 * * 1  cd /path/to/webwatch && /path/to/mise exec -- uv run webwatch digest >> /var/log/webwatch.log 2>&1
 ```
+
+Cron has no activated shell, so these jobs call `mise exec`. The `cd` matters twice: it is how mise
+finds `mise.toml`, and how webwatch finds `facts.yaml` and `state.json`. Run `mise install` as the
+cron user after every pull. If a pinned tool is missing, `mise exec` tries to install it during the
+job, and a failed download stops the job before webwatch runs, so no alert is sent.
 
 `notify` gives immediate on-change alerts; `digest` reminds you of unresolved problems on a slower
 cadence. Inspect the latest run by hand any time with `webwatch check`.

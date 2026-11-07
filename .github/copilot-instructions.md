@@ -5,7 +5,7 @@ This guide enables AI coding agents to work productively in this codebase. Follo
 ## Big Picture
 
 - **Webwatch** monitors where The Flip pinball museum appears on the web (its own site, map/listing profiles, event aggregators) and reports when published information is wrong or out of sync. It is a CLI run from cron — there is no web server or database.
-- **Language/runtime:** Python 3.14, managed by [`uv`](https://docs.astral.sh/uv/). Run everything via `uv run` (the `Makefile` wraps common commands).
+- **Language/runtime:** Python 3.14 and `uv`, pinned in `mise.toml`. [`uv`](https://docs.astral.sh/uv/) manages the venv and dependencies. Run everything via `uv run` (the `Makefile` wraps common commands).
 - **Core deps:** `click` (CLI), `httpx` (fetching), `python-decouple` (config), `extruct` + `beautifulsoup4` + `lxml` (extraction), `pyyaml` (facts).
 
 ## Project Structure

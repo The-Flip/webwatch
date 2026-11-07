@@ -1,4 +1,6 @@
 # Webwatch Makefile — all commands run through `uv`, which manages the .venv.
+# mise pins the uv and Python versions (see mise.toml); targets other than
+# `bootstrap` use the `uv` on PATH, so activate mise in your shell.
 # Override the runner with e.g. `make test UV="uv run --no-sync"`.
 UV ?= uv run
 
@@ -32,9 +34,11 @@ help:
 	@echo "                          e.g. make review-plan PLAN=docs/plans/phase-b.md"
 
 .PHONY: bootstrap
-bootstrap: install
-	$(UV) pre-commit install
-	$(UV) pre-commit install --hook-type pre-push
+bootstrap:
+	mise install
+	mise exec -- uv sync
+	mise exec -- uv run pre-commit install
+	mise exec -- uv run pre-commit install --hook-type pre-push
 	@test -f .env || cp .env.example .env
 	@echo "Bootstrap complete. Edit .env to configure SMTP and runtime options."
 

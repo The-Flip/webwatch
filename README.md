@@ -27,8 +27,9 @@ point — it prevents both false alarms and silent misses. See
 
 ## Requirements
 
-- Python 3.14+
-- [`uv`](https://docs.astral.sh/uv/) for dependency and environment management
+- [`mise`](https://mise.jdx.dev/), activated in your shell. It installs the Python 3.14 and `uv`
+  versions pinned in `mise.toml`.
+- [`uv`](https://docs.astral.sh/uv/) (installed by mise) for dependency and environment management
 
 ## Setup
 
@@ -36,8 +37,9 @@ point — it prevents both false alarms and silent misses. See
 make bootstrap
 ```
 
-This syncs dependencies with `uv`, installs the pre-commit and pre-push git hooks, and creates
-`.env` from `.env.example`.
+This installs the pinned tools with mise, syncs dependencies with `uv`, installs the pre-commit and
+pre-push git hooks, and creates `.env` from `.env.example`. Run `mise install` again whenever
+`mise.toml` changes; until you do, `make` may silently use a different `uv` from your `PATH`.
 
 Then configure:
 
@@ -90,12 +92,15 @@ command and isn't used here). See [docs/Operations.md](docs/Operations.md) for t
 ```cron
 # Daily at 7am — run the checks, update state, and email ONLY when something changes
 # (a check newly fails or recovers).
-0 7 * * *  cd /path/to/webwatch && /path/to/uv run webwatch notify >> /var/log/webwatch.log 2>&1
+0 7 * * *  cd /path/to/webwatch && /path/to/mise exec -- uv run webwatch notify >> /var/log/webwatch.log 2>&1
 
 # Monday at 8am — email a standing summary of everything still open, so a long-running
 # problem doesn't go silent after its one `notify` alert. Reads saved state; no re-scrape.
-0 8 * * 1  cd /path/to/webwatch && /path/to/uv run webwatch digest >> /var/log/webwatch.log 2>&1
+0 8 * * 1  cd /path/to/webwatch && /path/to/mise exec -- uv run webwatch digest >> /var/log/webwatch.log 2>&1
 ```
+
+Run `mise install` as the cron user after every pull; see
+[docs/Operations.md](docs/Operations.md).
 
 **These only deliver when `WEBWATCH_EMAIL_DRY_RUN=false` in the environment.** It defaults to `true`
 (dry-run), so a bare cron entry would just print the email to the log and never notify anyone — set

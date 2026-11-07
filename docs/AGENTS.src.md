@@ -139,11 +139,11 @@ New contributors — clone the repo and run:
 make bootstrap
 ```
 
-This syncs dependencies with `uv`, installs pre-commit hooks, and creates `.env` from `.env.example`. Then edit `.env` to configure SMTP and runtime options.
+This installs the tools pinned in `mise.toml`, syncs dependencies with `uv`, installs pre-commit hooks, and creates `.env` from `.env.example`. Then edit `.env` to configure SMTP and runtime options.
 
 ## Development Commands
 
-This project uses [`uv`](https://docs.astral.sh/uv/) to manage the virtualenv and dependencies. Every command runs through `uv run`; the `Makefile` wraps the common ones.
+This project uses [`mise`](https://mise.jdx.dev/) to pin Python and `uv`, and [`uv`](https://docs.astral.sh/uv/) to manage the virtualenv and dependencies. Run `mise install` whenever `mise.toml` changes. Every command runs through `uv run`; the `Makefile` wraps the common ones.
 
 ```bash
 # Setup
@@ -180,7 +180,7 @@ START_AGENTS
 
 ### Sandboxed / no-network environments
 
-`uv sync` needs network access once to populate the venv. If the environment runs tasks with the network disabled, sync dependencies during setup. After that, `uv run --no-sync ...` avoids re-resolving. Integration tests (`@pytest.mark.integration`) require live network; the default `make test` excludes them.
+`mise install` and `uv sync` need network access once to install the tools and populate the venv. If the environment runs tasks with the network disabled, sync dependencies during setup. After that, `uv run --no-sync ...` avoids re-resolving. Integration tests (`@pytest.mark.integration`) require live network; the default `make test` excludes them.
 END_AGENTS
 
 ## Tool Usage
@@ -196,7 +196,7 @@ GitHub access:
 
 ## Architecture
 
-- **Language/runtime**: Python 3.14, managed by `uv`.
+- **Language/runtime**: Python 3.14, pinned by `mise`; `uv` manages the venv and dependencies.
 - **Core dependencies**: `click` (CLI), `httpx` (fetching), `python-decouple` (config), `extruct` + `beautifulsoup4` + `lxml` (extraction), `pyyaml` (facts).
 - **Shape**: a fetch boundary, robust extraction primitives, per-site sources that produce a typed `Observation`, checks that assert observations against `facts.yaml`/rules, and dry-run-able email notification gated on state transitions. No web server or database.
 

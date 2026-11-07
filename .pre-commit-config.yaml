@@ -8,6 +8,11 @@
 # commit guards (e.g. no-commit-to-branch) from blocking a legitimate push of main.
 default_stages: [pre-commit]
 
+# Pin Node for hooks that need it (prettier). Without a pin, nodeenv picks the newest
+# entry on nodejs.org, and it crashes parsing pre-release versions like 27.0.0-alpha.
+default_language_version:
+  node: 26.13.0
+
 repos:
   # Ruff - fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
