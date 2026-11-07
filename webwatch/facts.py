@@ -41,6 +41,8 @@ class Organization:
     listing_names: tuple[str, ...] = ()
     #: whether the business is open at all, as listings report it (e.g. "operational")
     business_status: str = ""
+    #: the online donation checkout the museum's donate page should link to
+    donation_url: str = ""
     #: weekday name -> raw hours value ("closed", a window dict, or a list of them)
     hours: dict[str, Any] = field(default_factory=dict)
 
@@ -116,6 +118,7 @@ def _parse_organization(data: Any) -> Organization:
         phone=str(mapping.get("phone", "")),
         email=str(mapping.get("email", "")),
         business_status=str(mapping.get("business_status", "")),
+        donation_url=str(mapping.get("donation_url", "")),
         listing_names=listing_names,
         hours=_require_mapping(mapping.get("hours"), "organization.hours"),
     )

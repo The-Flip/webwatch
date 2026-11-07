@@ -170,3 +170,28 @@ def test_domain_throttle_waits_between_same_host() -> None:
     throttle.wait("example.test")  # first call: no wait
     throttle.wait("example.test")  # immediately again: should wait the full delay
     assert slept == [2.0]
+
+
+def test_accepted_status_is_returned_not_raised() -> None:
+    """A source whose fact is "this URL exists" reads a 404 as an answer, not a failure."""
+    transport = httpx.MockTransport(lambda _r: httpx.Response(404, html="<p>Not found</p>"))
+    result = fetch(
+        "https://example.test/gone", transport=transport, accept_statuses=frozenset({404})
+    )
+    assert result.status_code == 404
+    assert not result.blocked
+
+
+def test_unaccepted_404_still_raises() -> None:
+    transport = httpx.MockTransport(lambda _r: httpx.Response(404, html="<p>Not found</p>"))
+    with pytest.raises(FetchError, match="404"):
+        fetch("https://example.test/gone", transport=transport, accept_statuses=frozenset({410}))
+
+
+def test_challenge_served_as_accepted_404_is_still_blocked() -> None:
+    body = "<html><title>Just a moment...</title></html>"
+    transport = httpx.MockTransport(lambda _r: httpx.Response(404, html=body))
+    result = fetch(
+        "https://example.test/gone", transport=transport, accept_statuses=frozenset({404})
+    )
+    assert result.blocked

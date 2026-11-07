@@ -19,6 +19,8 @@ HOME = (FIXTURES / "theflip_museum_2026-06-24.html").read_text(encoding="utf-8")
 VISIT = (FIXTURES / "theflip_museum_visit_2026-06-24.html").read_text(encoding="utf-8")
 APPLE_MAPS = (FIXTURES / "apple_maps_2026-09-26.html").read_text(encoding="utf-8")
 GOOGLE_MAPS = (FIXTURES / "google_maps_2026-09-28.json").read_text(encoding="utf-8")
+DONATE = (FIXTURES / "theflip_museum_donate_2026-10-15.html").read_text(encoding="utf-8")
+SQUARE = (FIXTURES / "square_donation_2026-10-15.html").read_text(encoding="utf-8")
 FACTS = load_facts("facts.yaml")
 # Pinned to the fixtures' capture date so the expired-events check is deterministic
 # (the listed events — Jun 27, Jul 4, Jul 11 — are all upcoming as of this date).
@@ -35,6 +37,10 @@ def _router(*, apple_maps: str = APPLE_MAPS) -> httpx.MockTransport:
             )
         if request.url.host == "maps.apple.com":
             html = apple_maps
+        elif request.url.host == "checkout.square.site":
+            html = SQUARE
+        elif request.url.path.rstrip("/") == "/donate":
+            html = DONATE
         elif request.url.path.rstrip("/") == "/visit":
             html = VISIT
         else:
@@ -62,6 +68,8 @@ def test_all_checks_ok_against_fixtures() -> None:
         "theflip_museum_visit",
         "apple_maps",
         "google_maps",
+        "theflip_museum_donate",
+        "square_donation",
     }
     assert any(r.name == "weekly-repair-day" for r in results)
     assert any(r.name == "expired_events" for r in results)
