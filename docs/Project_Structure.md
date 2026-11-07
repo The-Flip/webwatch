@@ -42,6 +42,7 @@ webwatch/                   # repo root (distribution & command are named "webwa
 │   ├── AGENTS.src.md       # Source for the generated agent docs
 │   └── plans/              # Design docs, reviewed by agy before implementation
 ├── CLAUDE.md / AGENTS.md   # GENERATED — do not edit directly
+├── mise.toml               # Pinned tool versions (Python, uv)
 ├── pyproject.toml          # Project metadata + tool config (ruff, mypy, pytest, coverage)
 └── Makefile                # Common commands (wrap `uv run ...`)
 ```

@@ -1,0 +1,7 @@
+# Tool versions for this project. uv still owns the venv and dependencies.
+# Keep this file tools-only: a fresh clone then needs no `mise trust`.
+# Keep python in step with .python-version, which stops uv from preferring a
+# newer uv-managed interpreter (requires-python has no upper bound).
+[tools]
+python = "3.14"
+uv = "0.13.7"
