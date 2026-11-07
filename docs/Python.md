@@ -4,7 +4,8 @@ Coding rules for this project. These complement the always-loaded rules in [`CLA
 
 ## Environment & dependencies
 
-- **`uv` manages everything.** Python 3.14, the venv, and dependencies are all managed by [`uv`](https://docs.astral.sh/uv/). Run code and tools with `uv run ...` (the `Makefile` wraps the common ones).
+- **mise pins the tools.** [`mise`](https://mise.jdx.dev/) installs the Python and `uv` versions declared in `mise.toml`. Run `mise install` whenever that file changes. Keep `.python-version` in step with `mise.toml`: it stops `uv` from preferring a newer uv-managed interpreter.
+- **`uv` manages the venv and dependencies.** Run code and tools with `uv run ...` (the `Makefile` wraps the common ones).
 - **Add dependencies with `uv`**, not by editing `pyproject.toml` by hand:
   - Runtime: `uv add <package>`
   - Dev-only: `uv add --dev <package>`

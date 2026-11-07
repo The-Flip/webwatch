@@ -6,6 +6,9 @@
 __pycache__/
 *.pyc
 
+# Local mise overrides
+mise.local.toml
+
 # Virtual environment / uv
 .venv/
 venv/
