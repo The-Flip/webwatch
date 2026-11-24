@@ -20,8 +20,10 @@ weekday; non-weekday rows are ignored. The raw time text is left for
 The rows *below* the heading are the holiday hours (undated; judged against the
 calendar by ``webwatch.holiday_hours``). Off-season the section is removed, which
 reads as "none posted" — but only if no holiday heading or holiday-labelled row
-appears anywhere else on the page; otherwise the section moved and the listing is
-``missing`` (``STRUCTURE_CHANGED``), never a false "none posted".
+appears outside the card, and no holiday row is left in it without its heading;
+otherwise (all or part of) the section moved and the listing is ``missing``
+(``STRUCTURE_CHANGED``), never a false "none posted". A holiday row under the
+heading whose markup we can't read is kept as unrecognized, not dropped.
 
 There is no ``openingHours`` JSON-LD on the page, so there is no corroboration
 source here (and no ``METADATA_DRIFT`` path); the visible card is authoritative. If
@@ -31,6 +33,7 @@ without changing the visible-text path.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from bs4 import BeautifulSoup, Tag
@@ -72,48 +75,73 @@ def _row_pair(element: Tag) -> tuple[str, str] | None:
     return label, value
 
 
-def _split_rows(card: Tag) -> tuple[list[tuple[str, str]], list[tuple[str, str]] | None]:
-    """The card's (regular rows, holiday rows), split at its "Holiday Hours" heading.
+@dataclass(slots=True)
+class _CardRows:
+    """The Hours card's rows, split at its "Holiday Hours" heading."""
+
+    regular: list[tuple[str, str]] = field(default_factory=list)
+    #: ``None`` when the card has no "Holiday Hours" heading.
+    holiday: list[tuple[str, str]] | None = None
+    #: Holiday labels under the heading that aren't in a readable row.
+    unreadable: list[str] = field(default_factory=list)
+
+
+def _split_rows(card: Tag) -> _CardRows:
+    """The card's rows, split at its "Holiday Hours" heading.
 
     Rows are read in document order; every row after the first "Holiday Hours"
     heading is a holiday row, so a holiday label can never leak into the weekly
-    hours. Holiday rows are ``None`` when the card has no such heading (the section
-    is legitimately removed off-season).
+    hours. Below the heading, a holiday label that isn't part of a readable row
+    (its markup changed) is kept as ``unreadable`` rather than silently dropped.
     """
-    regular: list[tuple[str, str]] = []
-    holiday: list[tuple[str, str]] | None = None
+    rows = _CardRows()
     for element in card.find_all(True):
-        if holiday is None and _is_holiday_heading(element):
-            holiday = []
+        if rows.holiday is None and _is_holiday_heading(element):
+            rows.holiday = []
             continue
         pair = _row_pair(element)
         if pair is not None:
-            (regular if holiday is None else holiday).append(pair)
-    return regular, holiday
+            (rows.regular if rows.holiday is None else rows.holiday).append(pair)
+        elif rows.holiday is not None and _is_loose_holiday_label(element):
+            rows.unreadable.append(normalize.collapse_whitespace(element.get_text(" ")))
+    return rows
+
+
+def _is_loose_holiday_label(element: Tag) -> bool:
+    """A leaf naming a holiday that isn't the label of a readable two-span row."""
+    if element.find(True) is not None:
+        return False
+    if holidays.holiday_for_label(element.get_text(" ", strip=True)) is None:
+        return False
+    parent = element.parent
+    return not (isinstance(parent, Tag) and _row_pair(parent) is not None)
 
 
 def _holiday_listing(
-    soup: BeautifulSoup, card: Tag | None, rows: list[tuple[str, str]] | None
+    soup: BeautifulSoup, card: Tag | None, rows: _CardRows
 ) -> Observed[HolidayListing]:
     """The holiday rows under the card's holiday heading, honestly.
 
-    No card -> ``missing``. No heading in the card -> an empty listing, unless holiday
-    content appears elsewhere on the page (the section moved) -> ``missing``. A
-    heading with no readable rows under it -> ``missing`` (the row markup changed;
-    that is not "none posted"). A blank value -> ``unparseable``, never compared.
+    ``missing`` (never a false "none posted") when: there is no card; any holiday
+    heading or holiday row appears outside the card (all or part of the section
+    moved); holiday rows sit in the card without their heading; or the heading has
+    no readable rows under it. No heading and no holiday rows -> an empty listing
+    (off-season). A blank value -> ``unparseable``, never compared.
     """
     if card is None:
         return Observed.missing("hours card not found")
-    if rows is None:
-        if _holiday_content_outside(soup, card):
-            return Observed.missing("holiday hours appear outside the Hours card")
+    if _holiday_content_outside(soup, card):
+        return Observed.missing("holiday hours appear outside the Hours card")
+    if rows.holiday is None:
+        if any(holidays.holiday_for_label(label) for label, _ in rows.regular):
+            return Observed.missing("holiday rows in the Hours card without their heading")
         return Observed.found(HolidayListing())
-    if not rows:
+    if not rows.holiday:
         return Observed.missing("Holiday Hours heading has no readable rows")
 
     items: list[ListedHours] = []
-    unrecognized: list[str] = []
-    for label, value in rows:
+    unrecognized: list[str] = list(rows.unreadable)
+    for label, value in rows.holiday:
         holiday = holidays.holiday_for_label(label)
         if holiday is None:
             unrecognized.append(label)
@@ -153,8 +181,8 @@ class TheFlipMuseumVisit(Source):
         }
         soup = BeautifulSoup(html, "lxml")
         card = _find_hours_card(soup)
-        regular, holiday_rows = _split_rows(card) if card is not None else ([], None)
-        for label, value in regular:
+        rows = _split_rows(card) if card is not None else _CardRows()
+        for label, value in rows.regular:
             for day in normalize.expand_days(label):
                 fields[f"hours.{day}"] = Observed.found(value)
 
@@ -168,7 +196,7 @@ class TheFlipMuseumVisit(Source):
             self.site,
             fields,
             events=events,
-            holiday_hours=_holiday_listing(soup, card, holiday_rows),
+            holiday_hours=_holiday_listing(soup, card, rows),
         )
 
 

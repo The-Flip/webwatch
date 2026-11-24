@@ -231,13 +231,16 @@ def day_hours(value: object) -> frozenset[tuple[int, int]] | str:
     ``(open, close)`` minute tuples so window order doesn't matter. This lets a
     source emit the *visible* hours text while ``facts.yaml`` uses whichever form
     is convenient — both normalize to the same value. Raises ``ValueError`` on
-    shapes it can't model (the caller maps that to ``PARSE_ERROR``).
+    shapes it can't model, including no windows at all (``""``, ``", ,"``, ``[]``):
+    "no hours" is not a value to compare (the caller maps it to ``PARSE_ERROR``).
     """
     if isinstance(value, str):
         text_value = value.strip()
         if text_value.lower() == "closed":
             return "closed"
-        return frozenset(_window(part.strip()) for part in text_value.split(",") if part.strip())
-
-    windows = value if isinstance(value, list) else [value]
+        windows: list[object] = [part.strip() for part in text_value.split(",") if part.strip()]
+    else:
+        windows = value if isinstance(value, list) else [value]
+    if not windows:
+        raise ValueError(f"no opening hours in {value!r}")
     return frozenset(_window(window) for window in windows)

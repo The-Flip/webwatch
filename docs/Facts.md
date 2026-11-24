@@ -80,9 +80,9 @@ Posting early is judged by the **season**, not per holiday. The five rows are us
 
 Some states are reported as checker conditions rather than verdicts:
 
-- **Unreadable listing.** An unreadable page region is `STRUCTURE_CHANGED`. Examples: the Hours card or the JSON-LD `Museum` node is gone, or holiday rows show up outside the card.
-- **Section removed.** A missing "Holiday Hours" section or `specialOpeningHoursSpecification` key means none are posted. That is legitimate off-season. It is also what a renamed JSON-LD key would look like; we accept that ambiguity because the `/visit` rows are checked independently, and a "Holiday Hours" heading with no readable rows under it is `STRUCTURE_CHANGED`, not "none posted". A blank hours value is `PARSE_ERROR`.
-- **Unrecognized row.** A holiday row whose label isn't recognized (say, "Xmas") is reported once, as `holiday_hours.unrecognized` (`STRUCTURE_CHANGED`). It also turns a "not posted" verdict into `STRUCTURE_CHANGED`, since that row might be the missing holiday.
+- **Unreadable listing.** An unreadable page region is `STRUCTURE_CHANGED`. Examples: the Hours card or the JSON-LD `Museum` node is gone, any holiday row or heading shows up outside the card (even if the rest of the section remains), or holiday rows remain in the card without their heading. A blocked page is `BLOCKED`.
+- **Section removed.** A missing "Holiday Hours" section or `specialOpeningHoursSpecification` key means none are posted. That is legitimate off-season. It is also what a renamed JSON-LD key would look like; we accept that ambiguity because the `/visit` rows are checked independently, and a "Holiday Hours" heading with no readable rows under it is `STRUCTURE_CHANGED`, not "none posted". A blank hours value, or a JSON-LD time out of range (`10:00:99`), is `PARSE_ERROR`.
+- **Unrecognized row.** A holiday row whose label isn't recognized (say, "Xmas"), or whose markup can't be read, is reported once, as `holiday_hours.unrecognized` (`STRUCTURE_CHANGED`). It also turns a "not posted" verdict into `STRUCTURE_CHANGED`, since that row might be the missing holiday.
 - **Dated entries.** JSON-LD entries are matched to holidays by the dates they cover (`validFrom`/`validThrough`, Date or DateTime).
   - Where several entries cover a holiday, only the narrowest is judged: a specific "Dec 25: closed" overrides a wide "Dec 20–31" range for Christmas.
   - A dated entry is stale only once its own range has ended. An entry covering an occurrence beyond the next one is "posted too early" regardless of the season.

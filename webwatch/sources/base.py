@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any
 
@@ -185,8 +185,19 @@ class Source(ABC):
         raise NotImplementedError(f"{self.name} does not accept non-2xx statuses")
 
     def blocked_observation(self, note: str) -> Observation:
-        """Every tracked field as ``BLOCKED`` — used when the fetch hit a challenge."""
-        return Observation(self.site, {name: Observed.blocked(note) for name in self.tracks})
+        """Everything this source reads as ``BLOCKED`` — used when the fetch hit a challenge.
+
+        That includes its events and holiday hours: a blocked page is an access
+        failure, not a source that has none (which would read as ``SKIPPED``).
+        """
+        observation = Observation(self.site, {name: Observed.blocked(note) for name in self.tracks})
+        return replace(
+            observation,
+            events=Observed.blocked(note) if self.provides_events else observation.events,
+            holiday_hours=(
+                Observed.blocked(note) if self.provides_holiday_hours else observation.holiday_hours
+            ),
+        )
 
     def request_headers(self) -> dict[str, str]:
         """Extra HTTP headers for this source's request (e.g. an API key). Default: none.

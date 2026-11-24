@@ -192,3 +192,12 @@ def test_datetime_valid_from_is_read_as_its_date() -> None:
     assert listing.value is not None
     (item,) = listing.value.items
     assert (item.start, item.end) == (dt.date(2026, 12, 24), dt.date(2026, 12, 24))
+
+
+@pytest.mark.parametrize("opens", ["10:00:99", "25:00", "10:61"])
+def test_out_of_range_times_are_unparseable_not_trimmed(opens: str) -> None:
+    listing = SOURCE.observe(
+        with_special_hours([_spec("2026-12-24", opens, "15:00")])
+    ).holiday_hours
+    assert listing.value is not None
+    assert listing.value.items[0].hours.reason is NotRead.UNPARSEABLE

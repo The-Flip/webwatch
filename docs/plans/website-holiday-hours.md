@@ -222,3 +222,15 @@ The `/pre-pr-check` reviewers (documentation, antipattern, clean-code, code-smel
 8. Smaller cleanups: a single source for check names, `calendar.THURSDAY`, and index-based (not `id()`) tracking in `expired`.
 
 Deferred: splitting `_judge` into per-phase helpers, and replacing the `provides_holiday_hours`/`holiday_hours_dated` flag pair with a capability object. The second is worth doing when the maps sources arrive in the follow-up PR.
+
+## PR review feedback incorporated (CodeRabbit, PR #5)
+
+1. **`day_hours` accepted "no hours".** `""`, `", ,"` and `[]` normalized to an empty set, so `facts.yaml` accepted `", ,"` and a blank page value compared as `MISMATCH`. `normalize.day_hours` now raises, giving a load error or `PARSE_ERROR`. This also covers the weekly `hours.*`.
+2. **A single unreadable holiday row was dropped.** Its label is now kept in `unrecognized`.
+3. **Holiday content outside the card was checked only when the card had no heading.** It is now checked always, so one moved row is never read as "not posted".
+4. **Holiday rows left in the card without their heading read as off-season.** They now give `missing`.
+5. **Out-of-range JSON-LD times were silently trimmed.** (`10:00:99` became `10:00`.) The whole time is now validated first.
+6. **A blocked page reported events and holiday hours as `SKIPPED` ("not supported").** It now reports them as `BLOCKED`.
+7. **The new negative `/visit` holiday tests built synthetic cards.** They now mutate the golden fixture in memory.
+
+Not taken: reporting `PARSE_ERROR` ahead of a stale or too-early verdict. Those verdicts rest on the row's presence and date, not its hours, so an unreadable value doesn't weaken them. "Remove it" is the actionable message, and a fresh row with unreadable hours already gives `PARSE_ERROR`.

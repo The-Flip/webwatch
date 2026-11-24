@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from bs4 import BeautifulSoup, Tag
+
 from webwatch.facts import load_facts
 from webwatch.result import CheckStatus
 from webwatch.sources.base import NotRead
@@ -74,27 +76,56 @@ def test_day_omitted_from_card_is_structure_changed() -> None:
     assert _status("hours.sunday", html) is CheckStatus.STRUCTURE_CHANGED
 
 
-# --- regular hours alongside the Holiday Hours section ---------------------------
+# --- the Holiday Hours section: negative cases mutate the 2026-11-24 golden page ---------
 
 HOLIDAY_FIXTURE = Path(__file__).parent / "fixtures" / "theflip_museum_visit_2026-11-24.html"
 
 
-def _card_with_holidays(rows: list[tuple[str, str]], holiday_rows: list[tuple[str, str]]) -> str:
-    """A card shaped like the live page: regular rows, an h4 heading, holiday rows."""
+def _holiday_soup() -> BeautifulSoup:
+    """A fresh parse of the golden page, for in-memory mutation."""
+    return BeautifulSoup(HOLIDAY_FIXTURE.read_text(encoding="utf-8"), "lxml")
 
-    def block(pairs: list[tuple[str, str]]) -> str:
-        return "".join(
-            f'<div class="row"><span>{label}</span><span>{value}</span></div>'
-            '<div class="section-divider"></div>'
-            for label, value in pairs
-        )
 
-    return (
-        '<html><body><div class="card"><h3>Hours</h3>'
-        f'<div class="list">{block(rows)}</div>'
-        f'<h4>Holiday Hours</h4><div class="list">{block(holiday_rows)}</div>'
-        "</div></body></html>"
-    )
+def _heading(soup: BeautifulSoup) -> Tag:
+    heading = soup.find("h4", string="Holiday Hours")
+    assert isinstance(heading, Tag)
+    return heading
+
+
+def _section(soup: BeautifulSoup) -> tuple[Tag, Tag]:
+    """The "Holiday Hours" heading and the list of rows under it."""
+    heading = _heading(soup)
+    rows = heading.find_next_sibling("div")
+    assert isinstance(rows, Tag)
+    return heading, rows
+
+
+def _row(soup: BeautifulSoup, label: str) -> Tag:
+    span = soup.find("span", string=label)
+    assert span is not None and isinstance(span.parent, Tag)
+    return span.parent
+
+
+def _relabel(soup: BeautifulSoup, label: str, new: str) -> None:
+    span = soup.find("span", string=label)
+    assert span is not None
+    span.string = new
+
+
+def _body(soup: BeautifulSoup) -> Tag:
+    assert soup.body is not None
+    return soup.body
+
+
+def _listing(html: str | BeautifulSoup):
+    return SOURCE.observe(str(html)).holiday_hours
+
+
+def _off_season(soup: BeautifulSoup) -> BeautifulSoup:
+    """The golden page with its holiday section removed, as it is off-season."""
+    for element in _section(soup):
+        element.decompose()
+    return soup
 
 
 def test_regular_hours_ok_against_holiday_fixture() -> None:
@@ -105,18 +136,9 @@ def test_regular_hours_ok_against_holiday_fixture() -> None:
 
 def test_rows_under_the_holiday_heading_never_become_regular_hours() -> None:
     # A holiday row whose label reads like a weekday must not overwrite Monday.
-    html = _card_with_holidays(
-        [("Monday - Saturday", "10a - 8p"), ("Sunday", "11a - 6p")],
-        [("Monday", "Closed")],
-    )
-    assert _status("hours.monday", html) is CheckStatus.OK
-
-
-# --- holiday listing extraction ---------------------------------------------------
-
-
-def _listing(html: str):
-    return SOURCE.observe(html).holiday_hours
+    soup = _holiday_soup()
+    _relabel(soup, "Christmas Day", "Monday")
+    assert _status("hours.monday", str(soup)) is CheckStatus.OK
 
 
 def test_holiday_listing_from_fixture() -> None:
@@ -134,65 +156,96 @@ def test_holiday_listing_from_fixture() -> None:
 
 
 def test_unrecognized_holiday_label_is_kept_not_guessed() -> None:
-    html = _card_with_holidays([("Sunday", "11a - 6p")], [("Xmas", "Closed")])
-    listing = _listing(html)
+    soup = _holiday_soup()
+    _relabel(soup, "Christmas Eve", "Xmas Eve")
+    listing = _listing(soup)
     assert listing.value is not None
-    assert listing.value.items == ()
-    assert listing.value.unrecognized == ("Xmas",)
+    assert "christmas_eve" not in {i.holiday for i in listing.value.items}
+    assert listing.value.unrecognized == ("Xmas Eve",)
 
 
 def test_no_holiday_section_is_an_empty_listing() -> None:
     # Off-season the section is removed; that is a real reading, not a failure.
-    listing = _listing(_card([("Monday - Saturday", "10a - 8p")]))
+    listing = _listing(_off_season(_holiday_soup()))
     assert listing.is_found
     assert listing.value is not None
     assert listing.value.items == ()
 
 
 def test_missing_hours_card_makes_holiday_listing_missing() -> None:
-    listing = _listing("<html><body><p>No hours here.</p></body></html>")
-    assert not listing.is_found
+    soup = _holiday_soup()
+    hours = soup.find("h3", string="Hours")
+    assert hours is not None and hours.parent is not None
+    hours.parent.decompose()
+    assert not _listing(soup).is_found
 
 
-def test_holiday_rows_moved_outside_the_card_are_not_read_as_none_listed() -> None:
+def test_holiday_section_moved_outside_the_card_is_not_none_listed() -> None:
     # The section moved to its own card: we must not conclude "nothing posted".
-    html = _card([("Monday - Saturday", "10a - 8p")]).replace(
-        "</body>",
-        "<div><h3>Holiday Hours</h3><div><span>Thanksgiving</span><span>Closed</span></div></div></body>",
-    )
-    assert not _listing(html).is_found
+    soup = _holiday_soup()
+    moved = soup.new_tag("div")
+    for element in _section(soup):
+        moved.append(element.extract())
+    _body(soup).append(moved)
+    assert not _listing(soup).is_found
 
 
 def test_holiday_row_outside_the_card_without_a_heading_is_not_none_listed() -> None:
-    html = _card([("Monday - Saturday", "10a - 8p")]).replace(
-        "</body>", "<div><span>Christmas Day</span><span>Closed</span></div></body>"
-    )
-    assert not _listing(html).is_found
+    soup = _holiday_soup()
+    heading, rows = _section(soup)
+    row = _row(soup, "Christmas Day").extract()
+    heading.decompose()
+    rows.decompose()
+    _body(soup).append(row)
+    assert not _listing(soup).is_found
+
+
+def test_one_row_moved_outside_the_card_is_not_read_as_absent() -> None:
+    # The heading and the other rows remain; Thanksgiving alone moved.
+    soup = _holiday_soup()
+    _body(soup).append(_row(soup, "Thanksgiving").extract())
+    assert not _listing(soup).is_found
+
+
+def test_holiday_rows_left_in_the_card_without_their_heading_are_not_none_listed() -> None:
+    soup = _holiday_soup()
+    _heading(soup).decompose()
+    assert not _listing(soup).is_found
 
 
 def test_holiday_heading_with_no_readable_rows_is_not_none_listed() -> None:
     # The heading is there but the row markup changed: we can't read the section,
     # which is not the same as "nothing posted".
-    html = HOLIDAY_FIXTURE.read_text(encoding="utf-8")
-    start = html.index("Holiday Hours</h4>")
-    end = html.index("</div></div>", html.index("New Year&#x27;s Day", start))
-    mutated = html[:start] + html[start:end].replace("<span", "<p").replace("</span>", "</p>")
-    assert not _listing(mutated + html[end:]).is_found
+    soup = _holiday_soup()
+    for span in _section(soup)[1].find_all("span"):
+        span.name = "p"
+    assert not _listing(soup).is_found
+
+
+def test_one_unreadable_row_is_unrecognized_not_absent() -> None:
+    soup = _holiday_soup()
+    for span in _row(soup, "Thanksgiving").find_all("span"):
+        span.name = "p"
+    listing = _listing(soup)
+    assert listing.value is not None
+    assert "thanksgiving" not in {i.holiday for i in listing.value.items}
+    assert listing.value.unrecognized == ("Thanksgiving",)
 
 
 def test_blank_holiday_hours_value_is_unparseable_not_found() -> None:
-    html = _card_with_holidays([("Sunday", "11a - 6p")], [("Thanksgiving", " ")])
-    listing = _listing(html)
+    soup = _holiday_soup()
+    _row(soup, "Thanksgiving").find_all("span")[1].string = " "
+    listing = _listing(soup)
     assert listing.value is not None
-    hours = listing.value.items[0].hours
-    assert hours.reason is NotRead.UNPARSEABLE
+    assert listing.value.items[0].hours.reason is NotRead.UNPARSEABLE
 
 
 def test_unrelated_holiday_heading_elsewhere_is_not_a_moved_section() -> None:
     # Off-season, an events heading like "Holiday Pinball Party" is not holiday hours.
-    html = _card([("Monday - Saturday", "10a - 8p")]).replace(
-        "</body>", "<div><h4>Holiday Pinball Party</h4><p>Dec 12</p></div></body>"
-    )
-    listing = _listing(html)
+    soup = _off_season(_holiday_soup())
+    heading = soup.new_tag("h4")
+    heading.string = "Holiday Pinball Party"
+    _body(soup).append(heading)
+    listing = _listing(soup)
     assert listing.is_found
     assert listing.value is not None and listing.value.items == ()

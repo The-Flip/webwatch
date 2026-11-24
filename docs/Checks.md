@@ -61,7 +61,9 @@ Some published facts only make sense relative to the date: holiday hours must be
 - **The source stays pure.** It returns a `HolidayListing` in `Observation.holiday_hours`: the rows or entries it found, plus any it couldn't attribute (`unrecognized`). Visible labels resolve to holidays through `holidays.holiday_for_label`. JSON-LD entries carry dates, and the check matches them to holidays because that step needs the clock. The source sets `provides_holiday_hours`, and `holiday_hours_dated` if its entries carry dates.
 - **The check is clock-injected** (`webwatch/holiday_hours.py`), like `expired_events`. `run.py` wires it for every source that provides holiday hours, outside the `Check` registry, whose `run()` takes no clock. It produces `holiday_hours.<name>` for each holiday, `holiday_hours.unrecognized`, and, for dated sources, `holiday_hours.expired`. Any of these names works with `--fact`.
 - **Absence counts as a reading only when it is provable.**
-  - A missing section reads as "none posted" only if no "Holiday Hours" heading or holiday-labelled row appears anywhere else on the page. A heading that merely mentions a holiday ("Holiday Pinball Party") doesn't count.
+  - Any "Holiday Hours" heading or holiday-labelled row outside the card means (part of) the section moved: `missing`, whether or not the rest of it remains. A heading that merely mentions a holiday ("Holiday Pinball Party") doesn't count.
+  - A missing section reads as "none posted" only if no holiday-labelled row remains in the card without its heading.
+  - A holiday row under the heading that can't be read is unrecognized, not dropped.
   - A "Holiday Hours" heading with no readable rows under it is `missing`, not "none posted".
   - "Not posted" is asserted only when every row in the section is accounted for.
 - **Rows are split by document order.** On `/visit` the holiday rows sit in the same card as the weekly hours, so weekly hours are read only from rows _above_ the holiday heading. A holiday row can never overwrite a weekday.

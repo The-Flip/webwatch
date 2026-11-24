@@ -64,13 +64,21 @@ def _museum_node(html: str) -> dict[str, Any] | None:
 
 #: A special-hours entry spanning longer than this isn't a holiday closure we model.
 _MAX_SPECIAL_SPAN = dt.timedelta(days=31)
-_CLOCK = re.compile(r"^(\d{1,2}:\d{2})(?::\d{2})?$")
+_CLOCK = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
 
 
 def _clock(value: object) -> str | None:
-    """``"HH:MM"`` from a schema.org time (seconds dropped), or None if not a time."""
-    match = _CLOCK.match(value.strip()) if isinstance(value, str) else None
-    return match.group(1) if match else None
+    """``"HH:MM"`` from a schema.org time, or None if not a valid time.
+
+    Seconds are dropped only after the whole time is validated, so an out-of-range
+    ``"10:00:99"`` is unreadable rather than silently trimmed to ``"10:00"``.
+    """
+    if not isinstance(value, str) or not _CLOCK.match(value.strip()):
+        return None
+    hours, minutes, seconds = [*map(int, value.strip().split(":")), 0][:3]
+    if hours > 23 or minutes > 59 or seconds > 59:
+        return None
+    return f"{hours:02d}:{minutes:02d}"
 
 
 def _special_hours(entry: dict[str, Any]) -> Observed[str]:

@@ -212,3 +212,10 @@ def test_week_hours_joins_windows_and_closes_missing_days() -> None:
     assert week["tuesday"] == "closed"
     assert week["sunday"] == "closed"
     assert list(week) == list(normalize.WEEKDAYS)
+
+
+@pytest.mark.parametrize("value", ["", "  ", ", ,", []])
+def test_day_hours_with_no_windows_is_unparseable_not_empty(value: object) -> None:
+    # "No hours at all" is not a value: it must never compare as a MISMATCH.
+    with pytest.raises(ValueError):
+        normalize.day_hours(value)

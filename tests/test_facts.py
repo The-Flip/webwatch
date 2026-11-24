@@ -151,3 +151,8 @@ def test_holiday_hours_unparseable_hours_raise() -> None:
 def test_holiday_hours_must_be_a_mapping() -> None:
     with pytest.raises(FactsError, match="holiday_hours"):
         _holiday_facts(["thanksgiving"])
+
+
+def test_holiday_hours_with_no_windows_raise() -> None:
+    with pytest.raises(FactsError, match="thanksgiving"):
+        _holiday_facts({"thanksgiving": ", ,"})
