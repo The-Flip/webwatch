@@ -50,6 +50,16 @@ organization:
     saturday: '10:00 - 20:00'
     sunday: '11:00 - 18:00'
 
+  # Hours on named holidays (same formats as `hours`). The website must post each
+  # one at least 30 days ahead (up to 60 allowed) and remove it after the day.
+  # Holiday names are a fixed list (webwatch/holidays.py); see docs/Facts.md.
+  holiday_hours:
+    thanksgiving: closed
+    christmas_eve: '10:00 - 15:00'
+    christmas: closed
+    new_years_eve: '10:00 - 15:00'
+    new_years_day: closed
+
 # Dynamic expectations evaluated against observed events/schedules.
 # See docs/Facts.md for the full rule schema. These are examples to grow from.
 rules:

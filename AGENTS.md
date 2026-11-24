@@ -191,6 +191,9 @@ webwatch/                   # repo root (distribution & command are named "webwa
 │   ├── fetch.py            # The single HTTP boundary (retry/backoff, UA, politeness)
 │   ├── facts.py            # Load + validate facts.yaml
 │   ├── rules.py            # Evaluate dynamic rules (clock injected for testability)
+│   ├── expiry.py           # Expired-events check (clock injected)
+│   ├── holidays.py         # Named-holiday vocabulary and dates (pure)
+│   ├── holiday_hours.py    # Holiday-hours posting/removal check (clock injected)
 │   ├── normalize.py        # Canonicalize values before comparison
 │   ├── result.py           # CheckStatus / CheckResult — the core abstraction
 │   ├── state.py            # Run-to-run state (alert-on-transition / anti-flap)

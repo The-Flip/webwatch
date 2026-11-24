@@ -29,6 +29,9 @@ organization:
     saturday: { open: '10:00', close: '17:00' } # or an open/close map
     sunday: closed
     # ...one entry per weekday
+  holiday_hours: # see "Holiday hours" below
+    thanksgiving: closed
+    christmas_eve: '10:00 - 15:00'
 ```
 
 Conventions:
@@ -39,6 +42,53 @@ Conventions:
 - `donation_url` is the online checkout that the "Donate Now" button on `theflip.museum/donate` should link to. Two checks use it: `theflip_museum_donate` asserts the page links here, and `square_donation` asserts the link is still live (not deleted or disabled, and the store is accepting payments). It must be a canonical `https://checkout.square.site/merchant/<id>/checkout/<id>` URL, not a `square.link` short link. If you replace the link, also change `SquareDonation.url` in `webwatch/sources/square_donation.py`. A test fails until the two agree. Leaving it blank skips both checks.
 - Leave a value as `""` (empty) to mean "not yet verified — don't check this." Checks treat empty expected facts as `SKIPPED` rather than asserting against a blank.
 - `facts.py` validates the shape on load and fails loudly on a malformed file.
+
+## Holiday hours
+
+`organization.holiday_hours` maps a **named holiday** to its hours, written in the same forms as `hours` (`closed`, a range, an `{open, close}` map, or a list).
+
+The names come from a fixed vocabulary in `webwatch/holidays.py`:
+
+| Name            | Date                     | Visible labels recognized      |
+| --------------- | ------------------------ | ------------------------------ |
+| `thanksgiving`  | 4th Thursday of November | Thanksgiving, Thanksgiving Day |
+| `christmas_eve` | Dec 24                   | Christmas Eve                  |
+| `christmas`     | Dec 25                   | Christmas, Christmas Day       |
+| `new_years_eve` | Dec 31                   | New Year's Eve                 |
+| `new_years_day` | Jan 1                    | New Year's Day, New Year's     |
+
+`facts.py` rejects an unknown name or an unparseable value when it loads the file, so a typo can't quietly go unchecked. To add a holiday, add one entry to `webwatch/holidays.py` with a test of its dates. Every holiday in the vocabulary is always reported. One that is missing here, or blank, shows as `SKIPPED`.
+
+**Why this is a fact, not a rule.** Rules are evaluated against a page's events list. Holiday hours are expected values compared through `normalize.day_hours`, just like `hours`. The only difference is that their date depends on the calendar.
+
+### When a holiday must be posted, and removed
+
+The museum's website (the `/visit` "Holiday Hours" rows and the homepage JSON-LD `specialOpeningHoursSpecification`) is checked against this policy (`webwatch/holiday_hours.py`). "Today" is in the museum's timezone.
+
+| Situation                                                  | Result                               |
+| ---------------------------------------------------------- | ------------------------------------ |
+| Listed, and the holiday has passed (see below)             | `MISMATCH`: "has passed … remove it" |
+| Listed for the upcoming occurrence, with hours that match  | `OK`                                 |
+| Listed for the upcoming occurrence, with hours that differ | `MISMATCH`                           |
+| Listed while **no** configured holiday is within 60 days   | `MISMATCH`: "posted too early"       |
+| Not listed, holiday within 30 days                         | `MISMATCH`: "not posted"             |
+| Not listed, holiday more than 30 days away                 | `OK`                                 |
+
+A `/visit` row has no date, so it is taken to be about whichever occurrence is nearer: once the previous one is nearer than the next, the holiday has passed. A leftover row more than half a year old therefore reads as "posted too early" rather than "remove it"; both are `MISMATCH`.
+
+Posting early is judged by the **season**, not per holiday. The five rows are usually posted together when Thanksgiving falls due (30 days out), and New Year's Day is then about 66 days away. That is fine because the season is open.
+
+Some states are reported as checker conditions rather than verdicts:
+
+- **Unreadable listing.** An unreadable page region is `STRUCTURE_CHANGED`. Examples: the Hours card or the JSON-LD `Museum` node is gone, or holiday rows show up outside the card.
+- **Section removed.** A missing "Holiday Hours" section or `specialOpeningHoursSpecification` key means none are posted. That is legitimate off-season. It is also what a renamed JSON-LD key would look like; we accept that ambiguity because the `/visit` rows are checked independently, and a "Holiday Hours" heading with no readable rows under it is `STRUCTURE_CHANGED`, not "none posted". A blank hours value is `PARSE_ERROR`.
+- **Unrecognized row.** A holiday row whose label isn't recognized (say, "Xmas") is reported once, as `holiday_hours.unrecognized` (`STRUCTURE_CHANGED`). It also turns a "not posted" verdict into `STRUCTURE_CHANGED`, since that row might be the missing holiday.
+- **Dated entries.** JSON-LD entries are matched to holidays by the dates they cover (`validFrom`/`validThrough`, Date or DateTime).
+  - Where several entries cover a holiday, only the narrowest is judged: a specific "Dec 25: closed" overrides a wide "Dec 20–31" range for Christmas.
+  - A dated entry is stale only once its own range has ended. An entry covering an occurrence beyond the next one is "posted too early" regardless of the season.
+  - A well-formed entry not judged for any configured holiday (a one-off closure, or a holiday left blank in `facts.yaml`) is not judged, until it has ended; then it is reported as `holiday_hours.expired`.
+
+A row left up after a holiday alerts on the second daily run after it (`WEBWATCH_ALERT_AFTER_FAILURES`, default 2). To preview a date, run `webwatch check --today YYYY-MM-DD`.
 
 ## Dynamic rules
 

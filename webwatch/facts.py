@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from webwatch import config
+from webwatch import config, holidays, normalize
 
 
 class FactsError(Exception):
@@ -45,6 +45,8 @@ class Organization:
     donation_url: str = ""
     #: weekday name -> raw hours value ("closed", a window dict, or a list of them)
     hours: dict[str, Any] = field(default_factory=dict)
+    #: holiday name (from :data:`webwatch.holidays.NAMES`) -> raw hours value, as ``hours``
+    holiday_hours: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +106,28 @@ def _parse_listing_names(data: Any) -> tuple[str, ...]:
     return tuple(data)
 
 
+def _parse_holiday_hours(data: Any) -> dict[str, Any]:
+    """Holiday name -> hours, validated now so a typo or bad value fails at load.
+
+    An unknown name would otherwise never be checked, and an unparseable value would
+    surface every run as a ``PARSE_ERROR`` that looks like the page's fault.
+    """
+    mapping = _require_mapping(data, "organization.holiday_hours")
+    for name, value in mapping.items():
+        if name not in holidays.NAMES:
+            known = ", ".join(holidays.NAMES)
+            raise FactsError(
+                f"organization.holiday_hours: unknown holiday {name!r} (known: {known})"
+            )
+        if is_blank(value):
+            continue
+        try:
+            normalize.day_hours(value)
+        except ValueError as err:
+            raise FactsError(f"organization.holiday_hours.{name}: {err}") from err
+    return mapping
+
+
 def _parse_organization(data: Any) -> Organization:
     mapping = _require_mapping(data, "organization")
     listing_names = _parse_listing_names(mapping.get("listing_names"))
@@ -121,6 +145,7 @@ def _parse_organization(data: Any) -> Organization:
         donation_url=str(mapping.get("donation_url", "")),
         listing_names=listing_names,
         hours=_require_mapping(mapping.get("hours"), "organization.hours"),
+        holiday_hours=_parse_holiday_hours(mapping.get("holiday_hours")),
     )
 
 

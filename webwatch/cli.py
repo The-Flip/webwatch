@@ -8,7 +8,9 @@ tracks state and emails on transitions.
 
 from __future__ import annotations
 
+import datetime as dt
 import smtplib
+from zoneinfo import ZoneInfo
 
 import click
 
@@ -16,6 +18,7 @@ from webwatch import __version__, config
 from webwatch import facts as facts_module
 from webwatch.checks import registry as checks_registry
 from webwatch.facts import FactsError
+from webwatch.holiday_hours import check_names as holiday_check_names
 from webwatch.notify.email import EmailContent, render_digest, render_email, send_from_config
 from webwatch.report import render_json, render_matrix, render_text
 from webwatch.result import exit_code
@@ -49,18 +52,36 @@ def cli() -> None:
     show_default=True,
     help="Report format.",
 )
-def check(site: str | None, fact: str | None, run_all: bool, output_format: str) -> None:
+@click.option(
+    "--today",
+    "today",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Judge date-dependent checks (holiday hours, expired events) as of this date.",
+)
+def check(
+    site: str | None,
+    fact: str | None,
+    run_all: bool,
+    output_format: str,
+    today: dt.datetime | None,
+) -> None:
     """Run checks, print a report, and set the exit code.
 
     Exit codes: 0 all OK, 1 a MISMATCH (data out of sync), 2 a checker condition
-    (could not read/fetch). See ``webwatch.result``.
+    (could not read/fetch). See ``webwatch.result``. ``--today`` previews what the
+    live pages would be judged as on another date (e.g. the day after a holiday).
     """
     try:
         facts = facts_module.load_facts()
     except FactsError as err:
         raise click.ClickException(str(err)) from err
 
-    results = run_checks(facts, site=site, fact=fact)
+    now = None
+    if today is not None:
+        # Noon local: unambiguously "that day" in the museum's timezone.
+        now = today.replace(hour=12, tzinfo=ZoneInfo(config.TIMEZONE))
+    results = run_checks(facts, site=site, fact=fact, now=now)
     output = render_json(results) if output_format == "json" else render_text(results)
     click.echo(output)
     raise SystemExit(exit_code(results))
@@ -78,6 +99,9 @@ def list_checks() -> None:
         click.echo(f"{source.name}  ({source.url})")
         for check_spec in checks_registry.checks_for(source.name):
             click.echo(f"  - {check_spec.field}")
+        if source.provides_holiday_hours:
+            for name in holiday_check_names(dated=source.holiday_hours_dated):
+                click.echo(f"  - {name}")
 
 
 @cli.command()

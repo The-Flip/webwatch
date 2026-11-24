@@ -7,6 +7,7 @@ transport live in test_run.py.
 
 from __future__ import annotations
 
+import datetime as dt
 import smtplib
 
 import pytest
@@ -240,3 +241,36 @@ def test_digest_send_failure_is_clean_error(monkeypatch: pytest.MonkeyPatch, tmp
     result = CliRunner().invoke(cli, ["digest", "--send"])
     assert result.exit_code != 0
     assert "failed to send digest" in result.output
+
+
+def test_list_shows_holiday_hours_checks() -> None:
+    result = CliRunner().invoke(cli, ["list"])
+    assert "holiday_hours.thanksgiving" in result.output
+    assert "holiday_hours.expired" in result.output
+
+
+def test_check_today_pins_the_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run(*_a: object, **kwargs: object) -> list[CheckResult]:
+        seen.update(kwargs)
+        return [CheckResult.ok("s", "name", expected="x", observed="x")]
+
+    monkeypatch.setattr(cli_module, "run_checks", fake_run)
+    result = CliRunner().invoke(cli, ["check", "--today", "2026-11-27"])
+    assert result.exit_code == EXIT_OK
+    now = seen["now"]
+    assert isinstance(now, dt.datetime)
+    assert now.date() == dt.date(2026, 11, 27)
+    assert str(now.tzinfo) == "America/Chicago"
+
+
+def test_check_without_today_uses_the_real_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        cli_module,
+        "run_checks",
+        lambda *_a, **kw: seen.update(kw) or [CheckResult.ok("s", "n", expected="x", observed="x")],
+    )
+    CliRunner().invoke(cli, ["check"])
+    assert seen["now"] is None

@@ -53,6 +53,8 @@ Prefer the most stable signals, but **structured data corroborates — it does n
 
 4. **Declared anchors** — each source declares the anchors it depends on. If they vanish, the source returns `STRUCTURE_CHANGED` for the affected fields rather than guessing.
 
+> **Exception: special opening hours.** The homepage's JSON-LD `specialOpeningHoursSpecification` has no visible counterpart on that page. It is still checked in its own right, because it is the feed search engines and map apps ingest. Its visible counterpart, the `/visit` "Holiday Hours" rows, is checked independently, so neither one decides for the other. Per schema.org, `opens == closes == "00:00"` means closed, not open all day. See [Checks.md](Checks.md#calendar-dependent-listings-holiday-hours).
+
 ## Normalization before comparison
 
 Compare through [`webwatch/normalize.py`](../webwatch/normalize.py), never with raw `==`. Cosmetic differences — whitespace, `Street` vs `St`, `(555) 123-4567` vs `+15551234567`, `9 AM–5 PM` vs `09:00–17:00`, timezone rendering — are not mismatches. Normalize **both** the expected fact and the observed value, then compare. A raw string comparison in a check is a code smell.

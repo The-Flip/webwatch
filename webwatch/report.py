@@ -91,12 +91,17 @@ _ROW_ORDER = (
     "address.postal_code",
     "business_status",
     "hours",
+    "holiday_hours",
 )
 
 
 def _row(check_name: str) -> str:
-    """The table row a check belongs to; the seven ``hours.<day>`` checks share one."""
-    return "hours" if check_name.startswith("hours.") else check_name
+    """The table row a check belongs to; ``hours.<day>`` and ``holiday_hours.*`` collapse."""
+    if check_name.startswith("hours."):
+        return "hours"
+    if check_name.startswith("holiday_hours."):
+        return "holiday_hours"
+    return check_name
 
 
 def _ordered_sites(checked: set[str], site_labels: dict[str, str]) -> list[str]:

@@ -115,3 +115,39 @@ def test_donation_url_parses() -> None:
 
 def test_donation_url_defaults_to_blank() -> None:
     assert is_blank(parse_facts({"organization": {}}).organization.donation_url)
+
+
+def _holiday_facts(holiday_hours: object) -> facts.Facts:
+    return parse_facts({"organization": {"name": "The Flip", "holiday_hours": holiday_hours}})
+
+
+def test_holiday_hours_parse() -> None:
+    parsed = _holiday_facts({"thanksgiving": "closed", "christmas_eve": "10:00 - 15:00"})
+    assert parsed.organization.holiday_hours == {
+        "thanksgiving": "closed",
+        "christmas_eve": "10:00 - 15:00",
+    }
+
+
+def test_holiday_hours_default_to_empty() -> None:
+    assert parse_facts({"organization": {"name": "The Flip"}}).organization.holiday_hours == {}
+
+
+def test_holiday_hours_blank_value_is_allowed() -> None:
+    # Blank means "not verified" -> the check is SKIPPED, not a load error.
+    assert _holiday_facts({"christmas": ""}).organization.holiday_hours == {"christmas": ""}
+
+
+def test_holiday_hours_unknown_holiday_raises() -> None:
+    with pytest.raises(FactsError, match="christmass"):
+        _holiday_facts({"christmass": "closed"})
+
+
+def test_holiday_hours_unparseable_hours_raise() -> None:
+    with pytest.raises(FactsError, match="thanksgiving"):
+        _holiday_facts({"thanksgiving": "ten-ish"})
+
+
+def test_holiday_hours_must_be_a_mapping() -> None:
+    with pytest.raises(FactsError, match="holiday_hours"):
+        _holiday_facts(["thanksgiving"])

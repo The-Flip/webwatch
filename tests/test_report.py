@@ -82,3 +82,13 @@ def test_matrix_unknown_sites_follow_labelled_ones() -> None:
     )
     assert lines[0].split() == ["check", "Zeta", "alpha"]
     assert lines[2].split() == ["name", "ok", "blocked"]
+
+
+def test_matrix_groups_holiday_hours_and_shows_the_worst() -> None:
+    statuses = {
+        ("w", "holiday_hours.thanksgiving"): CheckStatus.MISMATCH,
+        ("w", "holiday_hours.christmas"): CheckStatus.OK,
+        ("w", "holiday_hours.unrecognized"): CheckStatus.OK,
+    }
+    lines = _matrix_lines(statuses, {"w": "Website"})
+    assert [line.split() for line in lines[2:]] == [["holiday_hours", "MISMATCH"]]
