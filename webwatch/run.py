@@ -20,10 +20,13 @@ from webwatch.checks.registry import PrerequisiteGate
 from webwatch.expiry import check_expired_events
 from webwatch.facts import Facts
 from webwatch.fetch import FetchError
+from webwatch.holiday_hours import check_holiday_hours
+from webwatch.holiday_hours import check_names as holiday_check_names
 from webwatch.result import CheckResult
 from webwatch.sources import registry as sources_registry
 from webwatch.sources.apple_maps import CHECKS as APPLE_MAPS_CHECKS
 from webwatch.sources.apple_maps import SOURCE as APPLE_MAPS_SOURCE
+from webwatch.sources.base import Observation
 from webwatch.sources.google_maps import CHECKS as GOOGLE_MAPS_CHECKS
 from webwatch.sources.google_maps import SOURCE as GOOGLE_MAPS_SOURCE
 from webwatch.sources.square_donation import CHECKS as SQUARE_DONATION_CHECKS
@@ -65,10 +68,10 @@ def run_checks(
 ) -> list[CheckResult]:
     """Fetch each (filtered) source once and run its checks against ``facts``.
 
-    ``site`` limits to one source; ``fact`` limits to one check field, rule id, or
-    ``expired_events``. ``transport`` is for tests (inject an ``httpx.MockTransport``).
-    ``now`` is the reference time for time-dependent checks (defaults to the
-    museum's local now); tests pin it.
+    ``site`` limits to one source; ``fact`` limits to one check field, rule id,
+    ``expired_events``, or ``holiday_hours.*`` check. ``transport`` is for tests
+    (inject an ``httpx.MockTransport``). ``now`` is the reference time for
+    time-dependent checks (defaults to the museum's local now); tests pin it.
     """
     register_builtins()
     if now is None:
@@ -93,7 +96,13 @@ def run_checks(
             if fact is not None:
                 event_rules = [r for r in event_rules if r.id == fact]
 
-        if not checks and not event_rules and not run_expiry:
+        holiday_names: list[str] = []
+        if source.provides_holiday_hours:
+            holiday_names = holiday_check_names(dated=source.holiday_hours_dated)
+            if fact is not None:
+                holiday_names = [n for n in holiday_names if n == fact]
+
+        if not checks and not event_rules and not run_expiry and not holiday_names:
             continue
 
         try:
@@ -102,6 +111,7 @@ def run_checks(
             names = [c.field for c in checks] + [r.id for r in event_rules]
             if run_expiry:
                 names.append(_EXPIRED_EVENTS)
+            names.extend(holiday_names)
             results.extend(fetch_error_results(source.name, names, str(err)))
             continue
 
@@ -124,8 +134,38 @@ def run_checks(
                 results.append(check_expired_events(observation.events, now=now, site=source.name))
             except Exception as err:
                 results.append(_crashed(source.name, _EXPIRED_EVENTS, err))
+        if holiday_names:
+            results.extend(
+                _holiday_results(
+                    observation,
+                    facts,
+                    now=now,
+                    site=source.name,
+                    dated=source.holiday_hours_dated,
+                    names=holiday_names,
+                )
+            )
 
     return results
+
+
+def _holiday_results(
+    observation: Observation,
+    facts: Facts,
+    *,
+    now: dt.datetime,
+    site: str,
+    dated: bool,
+    names: list[str],
+) -> list[CheckResult]:
+    """The holiday-hours results named in ``names``; a crash becomes STRUCTURE_CHANGED."""
+    try:
+        results = check_holiday_hours(
+            observation.holiday_hours, facts, now=now, site=site, dated=dated
+        )
+    except Exception as err:
+        return [_crashed(site, name, err) for name in names]
+    return [r for r in results if r.name in names]
 
 
 def _crashed(site: str, name: str, err: Exception) -> CheckResult:

@@ -5,16 +5,30 @@ How webwatch runs in production: the cron entry, notifications, state, and exit 
 ## Commands
 
 - **`webwatch check`** — run every check, print the report, set the exit code. Side-effect-free
-  (no state, no email). Use it interactively or in CI.
+  (no state, no email). Use it interactively or in CI. `--today YYYY-MM-DD` judges date-dependent
+  checks (holiday hours, expired events) as of that date, e.g. to preview the day after a holiday.
 - **`webwatch notify`** — the **cron entry point**. Runs the checks, updates run-to-run state, and
   emails when a check _transitions_ (newly fails or recovers). Same exit codes as `check`.
 - **`webwatch digest`** — a standing summary of every check still open, read from the saved state
   (it does _not_ re-run checks). Run on a slower cadence than `notify` so persistent problems don't
   fall silent after their one transition email. It ends with a table of checks (rows) by site
   (columns) showing each check's latest status, so an all-clear also shows what was checked. The
-  seven daily hours checks share one row, which shows the worst day, and `·` means there's no result
+  seven daily hours checks share one row, which shows the worst day (as do the `holiday_hours.*`
+  checks), and `·` means there's no result
   for that check on that site (it doesn't check it, or hasn't reported it yet). `--only-problems` suppresses the all-clear heartbeat.
   Exits 0 whenever it delivers (even with problems); non-zero only on a tool failure.
+
+## Holiday hours, through the year
+
+The website's holiday-hours checks follow the museum's posting policy (see
+[Facts.md](Facts.md#when-a-holiday-must-be-posted-and-removed)):
+
+- **Late October** (30 days before Thanksgiving, Oct 22–28): Thanksgiving must be posted. Post
+  the whole season's block at once. Early rows are fine while any holiday is within 60 days.
+- **Through December:** each holiday's row must stay correct.
+- **After each holiday:** remove its row on `/visit` and its homepage JSON-LD entry. A row still
+  up alerts on the second daily run.
+- **The rest of the year:** they report `OK` ("not listed yet").
 
 ## Exit codes
 

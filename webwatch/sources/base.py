@@ -9,8 +9,9 @@ missing region for a real value. See ``docs/Extraction.md`` and ``docs/Checks.md
 
 from __future__ import annotations
 
+import datetime as dt
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any
 
@@ -78,6 +79,35 @@ class Observed[T]:
 
 
 @dataclass(frozen=True, slots=True)
+class ListedHours:
+    """One holiday-hours row (visible) or entry (JSON-LD) as the page publishes it.
+
+    ``holiday`` is set when a visible label names a known holiday; dated entries
+    carry ``start``/``end`` instead and are attributed by date in the check (which
+    has the clock). ``hours`` is ``unparseable`` when the entry's times can't be read.
+    """
+
+    label: str
+    hours: Observed[str]
+    holiday: str | None = None
+    start: dt.date | None = None
+    end: dt.date | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HolidayListing:
+    """The holiday hours a page publishes: attributable items plus what we couldn't read.
+
+    ``unrecognized`` holds labels or entries that can't be attributed to any holiday
+    — they might be a renamed holiday, so they block "not posted" verdicts. An empty
+    listing is a real reading ("none posted"), not a failure.
+    """
+
+    items: tuple[ListedHours, ...] = ()
+    unrecognized: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class Observation:
     """Everything one source read from its page in a single fetch.
 
@@ -87,7 +117,8 @@ class Observation:
     checks layer to detect metadata drift without letting metadata decide.
     ``events`` carries the page's upcoming events for the rules engine: ``found``
     a list when the events section was located, ``missing`` when it wasn't, and
-    ``not_supported`` for sources that don't look for events.
+    ``not_supported`` for sources that don't look for events. ``holiday_hours``
+    is the same idea for a :class:`HolidayListing`.
     """
 
     site: str
@@ -95,6 +126,9 @@ class Observation:
     structured: dict[str, Any] = field(default_factory=dict)
     events: Observed[Any] = field(
         default_factory=lambda: Observed.not_supported("this source has no events")
+    )
+    holiday_hours: Observed[HolidayListing] = field(
+        default_factory=lambda: Observed.not_supported("this source has no holiday hours")
     )
 
     def get(self, name: str) -> Observed[Any]:
@@ -115,6 +149,10 @@ class Source(ABC):
     tracks: frozenset[str]
     #: Whether this source reads an events list (so the run evaluates rules against it).
     provides_events: bool = False
+    #: Whether this source reads holiday hours (so the run checks them against facts).
+    provides_holiday_hours: bool = False
+    #: Whether its holiday hours carry calendar dates (adds the ``expired`` check).
+    holiday_hours_dated: bool = False
     #: Non-2xx statuses that are an *answer* about this page rather than a fetch failure
     #: (e.g. 404 for a source whose fact is "this URL exists"); such a source must
     #: override :meth:`observe_not_found` to say what the answer means.
@@ -147,8 +185,19 @@ class Source(ABC):
         raise NotImplementedError(f"{self.name} does not accept non-2xx statuses")
 
     def blocked_observation(self, note: str) -> Observation:
-        """Every tracked field as ``BLOCKED`` — used when the fetch hit a challenge."""
-        return Observation(self.site, {name: Observed.blocked(note) for name in self.tracks})
+        """Everything this source reads as ``BLOCKED`` — used when the fetch hit a challenge.
+
+        That includes its events and holiday hours: a blocked page is an access
+        failure, not a source that has none (which would read as ``SKIPPED``).
+        """
+        observation = Observation(self.site, {name: Observed.blocked(note) for name in self.tracks})
+        return replace(
+            observation,
+            events=Observed.blocked(note) if self.provides_events else observation.events,
+            holiday_hours=(
+                Observed.blocked(note) if self.provides_holiday_hours else observation.holiday_hours
+            ),
+        )
 
     def request_headers(self) -> dict[str, str]:
         """Extra HTTP headers for this source's request (e.g. an API key). Default: none.

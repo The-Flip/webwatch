@@ -54,6 +54,22 @@ Use this only when the URL's existence is the fact being checked. Test the 404 p
 
 When a site only renders with JavaScript, use its official API if it has one (Google Maps → Places API). Override `request_headers()` to send the credential, and raise `FetchError` if it isn't configured. Capture a real response with `scripts/capture_fixture.py --source <name>`. See [Extraction.md](Extraction.md#blocked-and-js-rendered-pages) for how the status mapping carries over.
 
+## Calendar-dependent listings (holiday hours)
+
+Some published facts only make sense relative to the date: holiday hours must be posted before the holiday and taken down after it. The museum's own pages (`theflip_museum`, `theflip_museum_visit`) handle this as follows:
+
+- **The source stays pure.** It returns a `HolidayListing` in `Observation.holiday_hours`: the rows or entries it found, plus any it couldn't attribute (`unrecognized`). Visible labels resolve to holidays through `holidays.holiday_for_label`. JSON-LD entries carry dates, and the check matches them to holidays because that step needs the clock. The source sets `provides_holiday_hours`, and `holiday_hours_dated` if its entries carry dates.
+- **The check is clock-injected** (`webwatch/holiday_hours.py`), like `expired_events`. `run.py` wires it for every source that provides holiday hours, outside the `Check` registry, whose `run()` takes no clock. It produces `holiday_hours.<name>` for each holiday, `holiday_hours.unrecognized`, and, for dated sources, `holiday_hours.expired`. Any of these names works with `--fact`.
+- **Absence counts as a reading only when it is provable.**
+  - Any "Holiday Hours" heading or holiday-labelled row outside the card means (part of) the section moved: `missing`, whether or not the rest of it remains. A heading that merely mentions a holiday ("Holiday Pinball Party") doesn't count.
+  - A missing section reads as "none posted" only if no holiday-labelled row remains in the card without its heading.
+  - A holiday row under the heading that can't be read is unrecognized, not dropped.
+  - A "Holiday Hours" heading with no readable rows under it is `missing`, not "none posted".
+  - "Not posted" is asserted only when every row in the section is accounted for.
+- **Rows are split by document order.** On `/visit` the holiday rows sit in the same card as the weekly hours, so weekly hours are read only from rows _above_ the holiday heading. A holiday row can never overwrite a weekday.
+
+Google and Apple Maps also publish holiday ("special") hours, but only 7 days ahead. See `docs/plans/holiday-hours-check.md` for the planned follow-up.
+
 ## Don'ts
 
 - Don't anchor on positional CSS paths (`div:nth-child(3) > span`). Anchor on labels, microformats, roles, or structured data.

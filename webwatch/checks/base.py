@@ -65,7 +65,7 @@ def check_field(
     reported = accepted[0] if len(accepted) == 1 else accepted
 
     if not observed.is_found:
-        return _not_found_result(site, name, observed)
+        return not_found_result(site, name, observed)
 
     # Found a value. Normalize both sides; a normalizer that rejects the *observed*
     # value means the page had something we can't model -> PARSE_ERROR. A normalizer
@@ -98,7 +98,7 @@ def check_field(
     return CheckResult.ok(site, name, expected=reported, observed=observed.value)
 
 
-def _not_found_result(site: str, name: str, observed: Observed[Any]) -> CheckResult:
+def not_found_result(site: str, name: str, observed: Observed[Any]) -> CheckResult:
     note = observed.note
     match observed.reason:
         case NotRead.MISSING:

@@ -17,7 +17,7 @@ from webwatch.extract import structured
 from webwatch.extract.anchors import Found, by_itemprop, by_microformat
 from webwatch.fetch import FetchError
 from webwatch.result import CheckStatus
-from webwatch.sources.base import Observation, Observed, Source
+from webwatch.sources.base import NotRead, Observation, Observed, Source
 
 GOLDEN = """
 <html><head>
@@ -114,3 +114,18 @@ def test_accepting_statuses_requires_observe_not_found() -> None:
 
         class _Forgetful(FakeSource):
             accept_statuses = frozenset({404})
+
+
+def test_fetch_blocked_marks_events_and_holiday_hours_blocked(serve_html) -> None:
+    # A blocked page is an access failure, not "this source has none" (SKIPPED).
+    class Rich(FakeSource):
+        provides_events = True
+        provides_holiday_hours = True
+
+    challenge = "<html><title>Just a moment...</title></html>"
+    obs = Rich().fetch(transport=serve_html(challenge))
+    assert obs.events.reason is NotRead.BLOCKED
+    assert obs.holiday_hours.reason is NotRead.BLOCKED
+    assert FakeSource().fetch(transport=serve_html(challenge)).holiday_hours.reason is (
+        NotRead.NOT_SUPPORTED
+    )

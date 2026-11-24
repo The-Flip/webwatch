@@ -100,8 +100,9 @@ def test_fact_filter_runs_one_check() -> None:
 def test_site_filter_visit_only() -> None:
     results = run_checks(FACTS, site="theflip_museum_visit", transport=_router(), now=NOW)
     assert {r.site for r in results} == {"theflip_museum_visit"}
-    # 7 hours checks + the recurring-event rule + the expired-events check, all OK.
-    assert len(results) == 9
+    # 7 hours checks + the recurring-event rule + the expired-events check
+    # + 5 holiday-hours checks + holiday_hours.unrecognized, all OK.
+    assert len(results) == 15
     assert all(r.status is CheckStatus.OK for r in results)
 
 
@@ -171,3 +172,65 @@ def test_prerequisite_is_evaluated_even_when_filtered_out() -> None:
 def test_passing_prerequisite_lets_dependent_checks_run() -> None:
     results = run_checks(FACTS, site="apple_maps", fact="hours.monday", transport=_router())
     assert [(r.name, r.status) for r in results] == [("hours.monday", CheckStatus.OK)]
+
+
+# --- holiday hours --------------------------------------------------------------------
+
+HOME_NOV = (FIXTURES / "theflip_museum_2026-11-24.html").read_text(encoding="utf-8")
+VISIT_NOV = (FIXTURES / "theflip_museum_visit_2026-11-24.html").read_text(encoding="utf-8")
+
+
+def _website_router(home: str, visit: str) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        html = visit if request.url.path.rstrip("/") == "/visit" else home
+        return httpx.Response(200, html=html)
+
+    return httpx.MockTransport(handler)
+
+
+def _holiday(results: list) -> dict[tuple[str, str], CheckStatus]:
+    return {(r.site, r.name): r.status for r in results if r.name.startswith("holiday_hours.")}
+
+
+def test_holiday_hours_ok_on_both_pages_today() -> None:
+    now = dt.datetime(2026, 11, 24, 7, 0, tzinfo=ZoneInfo("America/Chicago"))
+    statuses = {}
+    for site in ("theflip_museum", "theflip_museum_visit"):
+        results = run_checks(
+            FACTS, site=site, transport=_website_router(HOME_NOV, VISIT_NOV), now=now
+        )
+        statuses.update(_holiday(results))
+    assert set(statuses.values()) == {CheckStatus.OK}, statuses
+    assert ("theflip_museum", "holiday_hours.expired") in statuses
+    assert ("theflip_museum_visit", "holiday_hours.expired") not in statuses  # undated
+
+
+def test_holiday_hours_left_up_after_thanksgiving_is_mismatch() -> None:
+    now = dt.datetime(2026, 11, 27, 7, 0, tzinfo=ZoneInfo("America/Chicago"))
+    results = run_checks(
+        FACTS,
+        fact="holiday_hours.thanksgiving",
+        transport=_website_router(HOME_NOV, VISIT_NOV),
+        now=now,
+    )
+    assert _holiday(results) == {
+        ("theflip_museum", "holiday_hours.thanksgiving"): CheckStatus.MISMATCH,
+        ("theflip_museum_visit", "holiday_hours.thanksgiving"): CheckStatus.MISMATCH,
+    }
+
+
+def test_holiday_fetch_error_fans_out_per_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("webwatch.config.HTTP_MAX_RETRIES", 0)
+
+    def boom(_req: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down")
+
+    results = run_checks(FACTS, site="theflip_museum", transport=httpx.MockTransport(boom))
+    holiday = _holiday(results)
+    assert len(holiday) == 7  # 5 holidays + unrecognized + expired
+    assert set(holiday.values()) == {CheckStatus.FETCH_ERROR}
+
+
+def test_sources_without_holiday_hours_report_none() -> None:
+    results = run_checks(FACTS, site="apple_maps", transport=_router(), now=NOW)
+    assert not _holiday(results)
